@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f2a4a">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1b2a">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Мой флот</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,119 +12,148 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <style>
 /*
-VOICE   calm bridge instrument; plain words a seaman uses
-IDEA    a paper Admiralty chart with a sea-service record beside it
-PICTURE the chart itself: my ships as magenta hulls, others as small soundings
-COLOUR  chart water, land buff, navy ink, Admiralty magenta; night = ECDIS dusk
+VOICE   bridge instrument: calm, exact, no decoration
+IDEA    an ECDIS screen at night with a sea-service record beside it
+PICTURE the live chart, full screen; ship symbols coloured by type, mine in magenta
+COLOUR  deep navy chrome, chart basemap, Admiralty magenta for my ships
 TYPE    Barlow Semi Condensed for names and figures, Barlow for text
-LAYOUT  panel left + chart right; on a phone chart on top, record below
+LAYOUT  phone: chart + bottom tabs + sheet; desktop: side panel + chart
 */
-:root{color-scheme:light dark;
---bg:light-dark(#f7f4ea,#0a1828);--panel:light-dark(#fffdf6,#0f2136);--ink:light-dark(#10284a,#dfe8f2);
---soft:light-dark(#5b6b80,#93a6bb);--line:light-dark(#e2dccb,#1f3550);--water:light-dark(#d6eaf3,#0b2035);
---land:light-dark(#efe3bd,#2b3226);--mag:light-dark(#a8136a,#ec5aa6);--mag-bg:light-dark(#f8e4ef,#3a1530);
---blue:light-dark(#1f5f99,#6fb0e8);--ok:light-dark(#21714b,#5fc690);--warn:light-dark(#9a5b00,#e8b04a)}
-:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+:root{color-scheme:dark;--chrome:#0d1b2a;--chrome2:#132638;--line:#22384f;--ink:#e6edf4;--soft:#94a7ba;
+--mag:#ec4f9e;--blue:#5aa9ec;--ok:#4fc68a;--warn:#e8b04a;--tab:64px}
 *{box-sizing:border-box;min-width:0}
-html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overflow:hidden}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--chrome);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overscroll-behavior:none}
 button,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--mag);outline-offset:2px}
-.app{display:grid;grid-template-columns:minmax(0,410px) minmax(0,1fr);height:100dvh}
-.panel{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;height:100dvh;padding-top:env(safe-area-inset-top)}
-#map{height:100dvh;background:var(--water)}
-header{padding:18px 20px 10px}
-h1{font:700 30px/1.05 "Barlow Semi Condensed","Arial Narrow",sans-serif;margin:0;letter-spacing:.2px}
-.status{color:var(--soft);font-size:14px;margin-top:4px}
-.tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--line)}
-.tab{flex:1;background:none;border:0;border-bottom:3px solid transparent;padding:10px 4px 9px;min-height:44px;font:600 17px "Barlow Semi Condensed","Arial Narrow",sans-serif;color:var(--soft);cursor:pointer}
-.tab[aria-selected=true]{color:var(--ink);border-color:var(--mag)}
-.tab small{font:500 14px Barlow;color:var(--soft);margin-left:4px}
-.body{flex:1;overflow-y:auto;padding:14px 20px calc(24px + env(safe-area-inset-bottom))}
-.search{position:relative;margin-bottom:12px}
-.search input{width:100%;height:48px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);padding:0 14px 0 42px;font-size:17px}
+#map{position:fixed;inset:0 0 calc(var(--tab) + env(safe-area-inset-bottom)) 0;background:#0b1e33}
+#ships{position:absolute;inset:0;pointer-events:none;z-index:450}
+.leaflet-container{font:14px Barlow,sans-serif}
+.leaflet-control-attribution{font-size:11px;background:rgba(13,27,42,.7)!important;color:#9fb2c4}
+.leaflet-control-attribution a{color:#9fc6ee}
+.leaflet-top.leaflet-right{top:calc(66px + env(safe-area-inset-top))}
+.leaflet-bar{border:1px solid var(--line)!important;box-shadow:none!important}
+.leaflet-bar a{background:rgba(13,27,42,.92)!important;color:var(--ink)!important;border-bottom-color:var(--line)!important;width:40px!important;height:40px!important;line-height:40px!important}
+
+.topbar{position:fixed;z-index:1000;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));display:flex;gap:8px}
+.sbox{flex:1;display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border-radius:12px;background:rgba(13,27,42,.92);border:1px solid var(--line);color:var(--soft);cursor:text;backdrop-filter:blur(8px);font-size:16px;text-align:left}
+.sbox svg{width:20px;height:20px;stroke:var(--soft);flex:none}
+.fabs{position:fixed;z-index:1000;right:12px;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 34px);display:flex;flex-direction:column;gap:10px}
+.fab{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:rgba(13,27,42,.92);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(8px)}
+.fab svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.count{position:fixed;z-index:1000;left:12px;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 34px);background:rgba(13,27,42,.9);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px;color:var(--soft);max-width:calc(100% - 100px)}
+.count b{color:var(--ink);font-weight:600}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:6px 12px 8px;font-size:13px;color:var(--soft)}
+.legend span{white-space:nowrap}.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
+.menu{position:fixed;z-index:1100;right:74px;width:260px;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 34px);background:var(--chrome2);border:1px solid var(--line);border-radius:12px;padding:6px;display:none;min-width:200px}
+.menu.on{display:block}
+.menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:0 12px;border:0;background:none;border-radius:8px;cursor:pointer;text-align:left}
+.menu button[aria-checked=true]{background:#1d3550}
+.menu button[aria-checked=true]::after{content:"✓";color:var(--mag);font-weight:700}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 6px}
+
+.tabs{position:fixed;z-index:1200;left:0;right:0;bottom:0;height:calc(var(--tab) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--chrome);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr)}
+.tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--soft);cursor:pointer;position:relative}
+.tab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-selected=true]{color:var(--ink)}
+.tab[aria-selected=true] svg{stroke:var(--mag)}
+.badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--mag);color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:0 6px;line-height:18px}
+
+.sheet{position:fixed;z-index:1150;left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom));height:62dvh;background:var(--chrome);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.45);display:flex;flex-direction:column;transform:translateY(110%);transition:transform .28s ease,height .28s ease}
+.sheet.on{transform:none}
+.sheet.full{height:calc(100dvh - var(--tab) - env(safe-area-inset-bottom) - env(safe-area-inset-top) - 8px)}
+.grab{flex:none;height:30px;display:grid;place-items:center;cursor:grab;touch-action:none;border:0;background:none;width:100%}
+.grab::before{content:"";width:44px;height:5px;border-radius:3px;background:#3a536d}
+.shead{flex:none;display:flex;align-items:center;gap:8px;padding:0 16px 10px}
+.shead h2{flex:1;margin:0;font:700 26px/1.1 "Barlow Semi Condensed","Arial Narrow",sans-serif;overflow-wrap:anywhere}
+.x{width:44px;height:44px;border-radius:50%;border:0;background:var(--chrome2);font-size:22px;cursor:pointer;line-height:1;flex:none}
+.sbody{flex:1;overflow-y:auto;padding:0 16px 24px;-webkit-overflow-scrolling:touch}
+
+.search{position:relative;margin-bottom:10px}
+.search input{width:100%;height:48px;border:1px solid var(--line);border-radius:12px;background:var(--chrome2);padding:0 14px 0 42px;font-size:17px}
 .search input:focus{border-color:var(--blue);outline:none}
-.search svg{position:absolute;left:13px;top:14px;width:20px;height:20px;stroke:var(--soft)}
-.hint{color:var(--soft);font-size:14px;margin:0 0 10px}
+.search svg{position:absolute;left:13px;top:14px;width:20px;height:20px;stroke:var(--soft);fill:none;stroke-width:2}
+.hint{color:var(--soft);font-size:14px;margin:4px 0 10px}
 .list{list-style:none;margin:0;padding:0}
-.row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;padding:11px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}
-.row:hover{background:var(--bg)}
-.flag{font-size:20px;line-height:1;grid-row:span 2;align-self:center}
-.nm{font:600 18px/1.2 "Barlow Semi Condensed","Arial Narrow",sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:0 10px;align-items:baseline;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.row:active{background:var(--chrome2)}
+.flag{font-size:21px;line-height:1;grid-row:span 3;align-self:center}
+.nm{font:600 19px/1.25 "Barlow Semi Condensed","Arial Narrow",sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--blue)}
 .mine .nm{color:var(--mag)}
+.right{font-size:13px;color:var(--soft);white-space:nowrap;text-align:right}
 .meta{grid-column:2/4;color:var(--soft);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ago{font-size:13px;color:var(--soft);white-space:nowrap}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--soft);vertical-align:1px}
+.note{grid-column:2/4;font-size:14px;font-style:italic}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--soft)}
 .dot.go{background:var(--ok)}.dot.stop{background:var(--blue)}.dot.old{background:var(--warn)}
-.note{grid-column:2/4;font-size:14px;color:var(--ink);font-style:italic}
-.empty{padding:22px 4px;color:var(--soft)}
-.empty strong{display:block;color:var(--ink);font:600 19px "Barlow Semi Condensed","Arial Narrow",sans-serif;margin-bottom:4px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);font-weight:600;cursor:pointer;text-decoration:none;color:var(--ink)}
+.empty{padding:18px 2px;color:var(--soft)}
+.empty strong{display:block;color:var(--ink);font:600 20px/1.2 "Barlow Semi Condensed","Arial Narrow",sans-serif;margin-bottom:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--chrome2);font-weight:600;cursor:pointer;text-decoration:none;color:var(--ink)}
 .btn.main{background:var(--mag);border-color:var(--mag);color:#fff}
-.btn.quiet{border-color:transparent;background:none;color:var(--blue);padding:0 6px}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
-.back{margin:-4px 0 6px -6px}
-.ship h2{font:700 34px/1.05 "Barlow Semi Condensed","Arial Narrow",sans-serif;margin:4px 0 2px;text-wrap:balance;overflow-wrap:anywhere}
-.ship .sub{color:var(--soft);margin:0 0 4px}
-.now{background:var(--water);border-radius:10px;padding:12px 14px;margin:12px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.now b{display:block;font:600 22px/1.1 "Barlow Semi Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sub{color:var(--soft);margin:0}
+.now{background:var(--chrome2);border-radius:12px;padding:12px 14px;margin:12px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.now b{display:block;font:600 23px/1.1 "Barlow Semi Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .now span{font-size:13px;color:var(--soft)}
 .now p{grid-column:1/-1;margin:0;font-size:14px}
-dl{display:grid;grid-template-columns:8.5em minmax(0,1fr);gap:7px 12px;margin:10px 0;font-size:15px}
+dl{display:grid;grid-template-columns:8.5em minmax(0,1fr);gap:7px 12px;margin:12px 0;font-size:15px}
 dt{color:var(--soft)}dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
-.links a{font-size:15px}
+.links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 label.f{display:block;font-size:14px;color:var(--soft);margin:12px 0 4px}
-textarea,.field{width:100%;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);padding:10px 12px;font-size:16px}
-textarea{min-height:76px;resize:vertical}
-.field{height:48px}
+textarea{width:100%;min-height:76px;border:1px solid var(--line);border-radius:12px;background:var(--chrome2);padding:10px 12px;font-size:16px;resize:vertical}
 details{margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
 summary{cursor:pointer;font-weight:600;min-height:32px}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,30px);opacity:0;background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;font-weight:600;transition:.25s;z-index:2000;pointer-events:none}
+.status{font-size:13px;color:var(--soft);margin:18px 0 0}
+.toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translate(-50%,-20px);opacity:0;background:var(--ink);color:var(--chrome);padding:10px 16px;border-radius:10px;font-weight:600;transition:.25s;z-index:3000;pointer-events:none;max-width:90vw;text-align:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
-.leaflet-container{font:14px Barlow,sans-serif;background:var(--water)}
-.leaflet-popup-content{margin:10px 12px}
-.hull{transition:transform .3s}
-.maptools{position:absolute;right:10px;top:calc(10px + env(safe-area-inset-top));z-index:1000;display:flex;flex-direction:column;gap:6px}
-.maptools button{min-height:40px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 1px 3px rgba(16,40,74,.18)}
-.maptools button[aria-pressed=true]{background:var(--mag);color:#fff;border-color:var(--mag)}
-.mapwrap{position:relative}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .leaflet-tile-pane{filter:saturate(.7) brightness(.9)}}
-@media(max-width:760px){
- body{overflow:auto}
- .app{display:flex;flex-direction:column;height:auto}
- .mapwrap{position:sticky;top:0;z-index:5;order:-1}
- .maptools{flex-direction:row}
- .maptools button{min-height:36px;padding:0 10px;font-size:13px}
- #map{height:44dvh}
- .panel{height:auto;min-height:56dvh;border-right:0;padding-top:0}
- .body{overflow:visible}
- h1{font-size:26px}
+.me{width:18px;height:18px;border-radius:50%;background:#2f8cff;border:3px solid #fff;box-shadow:0 0 0 8px rgba(47,140,255,.25)}
+
+@media(min-width:900px){
+ :root{--tab:0px}
+ .tabs{right:auto;top:0;bottom:auto;width:420px;height:64px;padding:0;border-top:0;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+ .sheet,.sheet.full{right:auto;top:64px;bottom:0;width:420px;height:auto;border-radius:0;transform:none;border-top:0;border-right:1px solid var(--line);box-shadow:none}
+ .grab,.x{display:none}.shead{padding-top:14px}
+ #map{left:420px;bottom:0}
+ .topbar{left:436px;right:auto;width:380px}
+ .count{left:436px;bottom:24px}.fabs{bottom:24px}.menu{bottom:24px}
+ .leaflet-top.leaflet-right{top:10px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<div class="app">
-  <aside class="panel">
-    <header>
-      <h1>Мой флот</h1>
-      <div class="status" id="status">Загружаю базу судов…</div>
-    </header>
-    <nav class="tabs" role="tablist">
-      <button class="tab" role="tab" id="t-fleet" aria-selected="true">Мои суда<small id="fleetN"></small></button>
-      <button class="tab" role="tab" id="t-search" aria-selected="false">Поиск</button>
-    </nav>
-    <div class="body" id="body"></div>
-  </aside>
-  <div class="mapwrap">
-    <div id="map" aria-label="Карта"></div>
-    <div class="maptools">
-      <button id="b-near" aria-pressed="false">Все суда</button>
-      <button id="b-sea" aria-pressed="false">Морские знаки</button>
-    </div>
-  </div>
+<div id="map" aria-label="Карта судов"></div>
+
+<div class="topbar"><button class="sbox" id="sbox"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg>Название судна, IMO или MMSI</button></div>
+
+<div class="count" id="count">Загружаю базу судов…</div>
+
+<div class="fabs">
+  <button class="fab" id="f-loc" title="Где я" aria-label="Показать моё место и суда рядом"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></button>
+  <button class="fab" id="f-fleet" title="Мои суда на карте" aria-label="Показать мои суда на карте"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M8 10h8M5 14a7 7 0 0 0 14 0"/></svg></button>
+  <button class="fab" id="f-layers" title="Вид карты" aria-label="Вид карты" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg></button>
 </div>
+<div class="menu" id="menu" role="menu">
+  <button role="menuitemradio" data-base="dark">Тёмная</button>
+  <button role="menuitemradio" data-base="light">Схема</button>
+  <button role="menuitemradio" data-base="sat">Спутник</button>
+  <hr>
+  <button role="menuitemcheckbox" id="m-sea">Морские знаки</button>
+  <button role="menuitemcheckbox" id="m-names">Названия судов</button>
+  <hr>
+  <div class="legend" id="legend"></div>
+</div>
+
+<section class="sheet" id="sheet" aria-live="polite">
+  <button class="grab" id="grab" aria-label="Развернуть или свернуть"></button>
+  <div class="shead"><h2 id="stitle"></h2><button class="x" id="sclose" aria-label="Закрыть">×</button></div>
+  <div class="sbody" id="sbody"></div>
+</section>
+
+<nav class="tabs" role="tablist">
+  <button class="tab" role="tab" data-tab="map" aria-selected="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>Карта</button>
+  <button class="tab" role="tab" data-tab="fleet" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 17l2 3h14l2-3H3zM5 17v-5h14v5M8 12V8h8v4M11 8V5h2v3"/></svg>Мои суда<span class="badge" id="badge" hidden></span></button>
+  <button class="tab" role="tab" data-tab="near" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>Рядом</button>
+  <button class="tab" role="tab" data-tab="search" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg>Поиск</button>
+</nav>
 <div class="toast" id="toast" role="status"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -131,22 +161,35 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
 {
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const desktop = () => matchMedia('(min-width:900px)').matches;
+const ls = {get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } },
+            set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e){ return false; } }};
+function toast(t){ const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('on'), 2600); }
 
 /* ---------- reference tables ---------- */
-const MID = (() => {
-  const src = "201AL 202AD 203AT 204PT 205BE 206BY 207BG 208VA 209CY 210CY 211DE 212CY 213GE 214MD 215MT 216AM 218DE 219DK 220DK 224ES 225ES 226FR 227FR 228FR 229MT 230FI 231FO 232GB 233GB 234GB 235GB 236GI 237GR 238HR 239GR 240GR 241GR 242MA 243HU 244NL 245NL 246NL 247IT 248MT 249MT 250IE 251IS 252LI 253LU 254MC 255PT 256MT 257NO 258NO 259NO 261PL 262ME 263PT 264RO 265SE 266SE 267SK 268SM 269CH 270CZ 271TR 272UA 273RU 274MK 275LV 276EE 277LT 278SI 279RS 301AI 303US 304AG 305AG 306CW 307AW 308BS 309BS 310BM 311BS 312BZ 314BB 316CA 319KY 321CR 323CU 325DM 327DO 329GP 330GD 331GL 332GT 334HN 336HT 338US 339JM 341KN 343LC 345MX 347MQ 348MS 350NI 351PA 352PA 353PA 354PA 355PA 356PA 357PA 358PR 359SV 361PM 362TT 364TC 366US 367US 368US 369US 370PA 371PA 372PA 373PA 374PA 375VC 376VC 377VC 378VG 379VI 401AF 403SA 405BD 408BH 410BT 412CN 413CN 414CN 416TW 417LK 419IN 422IR 423AZ 425IQ 428IL 431JP 432JP 434TM 436KZ 437UZ 438JO 440KR 441KR 443PS 445KP 447KW 450LB 451KG 453MO 455MV 457MN 459NP 461OM 463PK 466QA 468SY 470AE 471AE 472TJ 473YE 475YE 477HK 478BA 501TF 503AU 506MM 508BN 510FM 511PW 512NZ 514KH 515KH 516CX 518CK 520FJ 523CC 525ID 529KI 531LA 533MY 536MP 538MH 540NC 542NU 544NR 546PF 548PH 550TL 553PG 555PN 557SB 559AS 561WS 563SG 564SG 565SG 566SG 567TH 570TO 572TV 574VN 576VU 577VU 578WF 601ZA 603AO 605DZ 607TF 608SH 609BI 610BJ 611BW 612CF 613CM 615CG 616KM 617CV 619CI 620KM 621DJ 622EG 624ET 625ER 626GA 627GH 629GM 630GW 631GQ 632GN 633BF 634KE 636LR 637LR 638SS 642LY 644LS 645MU 647MG 649ML 650MZ 654MR 655MW 656NE 657NG 659NA 660RE 661RW 662SD 663SN 664SC 665SH 666SO 667SL 668ST 669SZ 670TD 671TG 672TN 674TZ 675UG 676CD 677TZ 678ZM 679ZW 701AR 710BR 720BO 725CL 730CO 735EC 740FK 745GF 750GY 755PY 760PE 765SR 770UY 775VE";
-  const m = {}; for (const p of src.split(' ')) m[p.slice(0,3)] = p.slice(3); return m;
-})();
+const MID = (() => { const m = {}; "201AL 202AD 203AT 204PT 205BE 206BY 207BG 208VA 209CY 210CY 211DE 212CY 213GE 214MD 215MT 216AM 218DE 219DK 220DK 224ES 225ES 226FR 227FR 228FR 229MT 230FI 231FO 232GB 233GB 234GB 235GB 236GI 237GR 238HR 239GR 240GR 241GR 242MA 243HU 244NL 245NL 246NL 247IT 248MT 249MT 250IE 251IS 252LI 253LU 254MC 255PT 256MT 257NO 258NO 259NO 261PL 262ME 263PT 264RO 265SE 266SE 267SK 268SM 269CH 270CZ 271TR 272UA 273RU 274MK 275LV 276EE 277LT 278SI 279RS 301AI 303US 304AG 305AG 306CW 307AW 308BS 309BS 310BM 311BS 312BZ 314BB 316CA 319KY 321CR 323CU 325DM 327DO 329GP 330GD 331GL 332GT 334HN 336HT 338US 339JM 341KN 343LC 345MX 347MQ 348MS 350NI 351PA 352PA 353PA 354PA 355PA 356PA 357PA 358PR 359SV 361PM 362TT 364TC 366US 367US 368US 369US 370PA 371PA 372PA 373PA 374PA 375VC 376VC 377VC 378VG 379VI 401AF 403SA 405BD 408BH 410BT 412CN 413CN 414CN 416TW 417LK 419IN 422IR 423AZ 425IQ 428IL 431JP 432JP 434TM 436KZ 437UZ 438JO 440KR 441KR 443PS 445KP 447KW 450LB 451KG 453MO 455MV 457MN 459NP 461OM 463PK 466QA 468SY 470AE 471AE 472TJ 473YE 475YE 477HK 478BA 501TF 503AU 506MM 508BN 510FM 511PW 512NZ 514KH 515KH 516CX 518CK 520FJ 523CC 525ID 529KI 531LA 533MY 536MP 538MH 540NC 542NU 544NR 546PF 548PH 550TL 553PG 555PN 557SB 559AS 561WS 563SG 564SG 565SG 566SG 567TH 570TO 572TV 574VN 576VU 577VU 578WF 601ZA 603AO 605DZ 607TF 608SH 609BI 610BJ 611BW 612CF 613CM 615CG 616KM 617CV 619CI 620KM 621DJ 622EG 624ET 625ER 626GA 627GH 629GM 630GW 631GQ 632GN 633BF 634KE 636LR 637LR 638SS 642LY 644LS 645MU 647MG 649ML 650MZ 654MR 655MW 656NE 657NG 659NA 660RE 661RW 662SD 663SN 664SC 665SH 666SO 667SL 668ST 669SZ 670TD 671TG 672TN 674TZ 675UG 676CD 677TZ 678ZM 679ZW 701AR 710BR 720BO 725CL 730CO 735EC 740FK 745GF 750GY 755PY 760PE 765SR 770UY 775VE".split(' ').forEach(p => m[p.slice(0,3)] = p.slice(3)); return m; })();
 let regionName = c => c;
-try { const dn = new Intl.DisplayNames(['ru'], {type:'region'}); regionName = c => dn.of(c) || c; } catch (e) {}
+try { const dn = new Intl.DisplayNames(['ru'], {type:'region'}); regionName = c => dn.of(c) || c; } catch(e){}
 const iso = mmsi => MID[String(mmsi).slice(0,3)] || '';
 const flagOf = mmsi => { const c = iso(mmsi); return c ? String.fromCodePoint(...[...c].map(ch => 127397 + ch.charCodeAt(0))) : '🏳'; };
+// colour groups follow the convention seafarers know from AIS plotters
+const GROUPS = [
+  ['Грузовые', '#3fbf5a', t => t >= 70 && t <= 79],
+  ['Танкеры', '#e5484d', t => t >= 80 && t <= 89],
+  ['Пассажирские', '#4f7dff', t => t >= 60 && t <= 69],
+  ['Служебные', '#2ec4d6', t => [31,32,33,34,50,51,52,53,54,55,58,59].includes(t)],
+  ['Рыболовные', '#f08a24', t => t === 30],
+  ['Скоростные', '#f2d23c', t => t >= 40 && t <= 49],
+  ['Яхты', '#a66bf0', t => t === 36 || t === 37],
+  ['Прочие', '#9aa7b4', () => true],
+];
+const colorOf = t => GROUPS.find(g => g[2](t || 0))[1];
 const typeName = t => {
   if (!t) return 'тип неизвестен';
   if (t >= 70 && t <= 79) return 'грузовое';
   if (t >= 80 && t <= 89) return 'танкер';
   if (t >= 60 && t <= 69) return 'пассажирское';
-  return ({30:'рыболовное',31:'буксир',32:'буксир',33:'земснаряд',35:'военное',36:'парусное',37:'прогулочное',50:'лоцманское',51:'спасательное',52:'буксир',53:'портовое',55:'полиция',58:'медицинское'})[t] || (t >= 40 && t <= 49 ? 'скоростное' : 'прочее');
+  return ({30:'рыболовное',31:'буксир',32:'буксир',33:'земснаряд',34:'водолазное',35:'военное',36:'парусное',37:'прогулочное',50:'лоцманское',51:'спасательное',52:'буксир',53:'портовое',54:'экологическое',55:'полиция',58:'медицинское'})[t] || (t >= 40 && t <= 49 ? 'скоростное' : 'прочее');
 };
 const NAV = {0:'на ходу',1:'на якоре',2:'не управляется',3:'ограничено в манёвре',4:'стеснено осадкой',5:'у причала',6:'на мели',7:'ловит рыбу',8:'под парусом'};
 const rtf = new Intl.RelativeTimeFormat('ru', {numeric:'auto'});
@@ -159,117 +202,196 @@ const ago = ts => {
   return rtf.format(-Math.round(s/86400), 'day');
 };
 const fmtDate = ts => new Date(ts*1000).toLocaleString('ru', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+const fmtNm = d => d < 10 ? d.toFixed(1).replace('.', ',') + ' мили' : Math.round(d) + ' миль';
 
 /* ---------- state ---------- */
 let F = {}, SHIPS = [], byMmsi = new Map(), byImo = new Map(), updated = 0;
-const store = {
-  get(){ try { return JSON.parse(localStorage.getItem('fleet.v1')) || []; } catch(e){ return []; } },
-  set(v){ try { localStorage.setItem('fleet.v1', JSON.stringify(v)); } catch(e){ toast('Браузер не сохраняет данные: список пропадёт после закрытия'); } }
-};
-let fleet = store.get();
-let view = {tab:'fleet', ship:null, q:''};
-
+let fleet = ls.get('fleet.v1', []);
+let prefs = Object.assign({base:'dark', sea:false, names:true}, ls.get('prefs.v1', {}));
+let myPos = null, tab = 'map', shipOpen = null, query = '';
 const get = (r, k) => r ? r[F[k]] : undefined;
 const findShip = e => (e.imo && byImo.get(+e.imo)) || (e.mmsi && byMmsi.get(+e.mmsi)) || null;
-const inFleet = r => fleet.findIndex(e => (e.imo && +e.imo === get(r,'imo')) || (e.mmsi && +e.mmsi === get(r,'mmsi')));
-
-function toast(t){ const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('on'), 2400); }
+const fleetIdx = r => fleet.findIndex(e => (e.imo && +e.imo === get(r,'imo')) || (e.mmsi && +e.mmsi === get(r,'mmsi')));
+let fleetSet = new Set();
+function refreshFleetSet(){ fleetSet = new Set(fleet.map(findShip).filter(Boolean)); const b = $('#badge'); b.hidden = !fleet.length; b.textContent = fleet.length; }
 
 /* ---------- map ---------- */
-const map = L.map('map', {zoomControl:false, worldCopyJump:true, preferCanvas:false}).setView([44, 25], 3);
-L.control.zoom({position:'bottomright'}).addTo(map);
-const dark = matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light';
-fetch('land.json').then(r => r.json()).then(g => {
-  L.geoJSON(g, {interactive:false, style:{color:getComputedStyle(document.body).getPropertyValue('--line'), weight:1, fillColor:getComputedStyle(document.body).getPropertyValue('--land'), fillOpacity:1}}).addTo(map).bringToBack();
-}).catch(()=>{});
-L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}{r}.png`, {
-  subdomains:'abcd', maxZoom:18, attribution:'© OpenStreetMap, © CARTO'}).addTo(map);
+const map = L.map('map', {zoomControl:false, worldCopyJump:true, minZoom:2, maxZoom:18}).setView([46, 30], 4);
+L.control.zoom({position:'topright'}).addTo(map);
+const nm = (a, b) => map.distance(a, b) / 1852;
+// on a phone the sheet covers the lower part of the map: aim at the visible part above it
+function flyVisible(ll, z){
+  z = z ?? map.getZoom();
+  const cover = !desktop() && sheet.classList.contains('on') ? sheet.getBoundingClientRect().height : 0;
+  const pt = map.project(ll, z).add([0, cover / 2]);
+  map.flyTo(map.unproject(pt, z), z, {duration:.8});
+}
+const BASES = {
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'}),
+  light: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'}),
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:18, attribution:'© Esri, Maxar, Earthstar Geographics'}),
+};
 const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {maxZoom:18, attribution:'© OpenSeaMap'});
-const canvas = L.canvas({padding:.3});
-const nearLayer = L.layerGroup().addTo(map), fleetLayer = L.layerGroup().addTo(map), pickLayer = L.layerGroup().addTo(map);
-let showNear = false;
+let base = null;
+function applyPrefs(){
+  if (base) map.removeLayer(base);
+  base = (BASES[prefs.base] || BASES.dark).addTo(map);
+  prefs.sea ? seamarks.addTo(map) : map.removeLayer(seamarks);
+  document.querySelectorAll('[data-base]').forEach(b => b.setAttribute('aria-checked', b.dataset.base === prefs.base));
+  $('#m-sea').setAttribute('aria-checked', prefs.sea);
+  $('#m-names').setAttribute('aria-checked', prefs.names);
+  ls.set('prefs.v1', prefs); draw();
+}
 
-function hull(r, mine){
-  const sog = get(r,'sog') || 0, dir = get(r,'hdg') ?? get(r,'cog') ?? 0;
-  const c = mine ? 'var(--mag)' : 'var(--blue)';
-  const shape = sog >= 0.5
-    ? `<path d="M12 2 L18 20 L12 16.5 L6 20 Z" fill="${c}" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>`
-    : `<circle cx="12" cy="12" r="6" fill="${c}" stroke="#fff" stroke-width="2"/>`;
-  return L.divIcon({className:'', iconSize:[24,24], iconAnchor:[12,12],
-    html:`<svg class="hull" width="24" height="24" viewBox="0 0 24 24" style="transform:rotate(${sog >= .5 ? dir : 0}deg);overflow:visible">${shape}</svg>`});
-}
-function drawFleet(){
-  fleetLayer.clearLayers();
-  const pts = [];
-  for (const e of fleet){
-    const r = findShip(e); if (!r || get(r,'lat') == null) continue;
-    const ll = [get(r,'lat'), get(r,'lon')]; pts.push(ll);
-    L.marker(ll, {icon:hull(r, true), title:get(r,'name'), zIndexOffset:500})
-      .on('click', () => openShip(r)).bindTooltip(esc(get(r,'name')), {direction:'top', offset:[0,-10]}).addTo(fleetLayer);
-  }
-  return pts;
-}
-function drawNear(){
-  nearLayer.clearLayers();
-  if (!showNear) return;
-  if (map.getZoom() < 5){ toast('Приблизь карту, чтобы увидеть все суда в районе'); return; }
-  const b = map.getBounds().pad(.1); let n = 0;
+/* every ship is drawn on one canvas, so tens of thousands stay fast */
+const cv = document.createElement('canvas'); cv.id = 'ships'; map.getContainer().appendChild(cv);
+const ctx = cv.getContext('2d');
+let drawn = [], raf = 0, zooming = false;
+function draw(){ cancelAnimationFrame(raf); raf = requestAnimationFrame(paint); }
+function paint(){
+  const size = map.getSize(), dpr = window.devicePixelRatio || 1;
+  if (cv.width !== size.x * dpr || cv.height !== size.y * dpr){ cv.width = size.x * dpr; cv.height = size.y * dpr; cv.style.width = size.x + 'px'; cv.style.height = size.y + 'px'; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, size.x, size.y);
+  drawn = [];
+  if (zooming) return;
+  const z = map.getZoom(), c = map.getCenter(), b = map.getBounds().pad(.05);
+  const s = z < 5 ? 2.2 : z < 7 ? 3.4 : z < 10 ? 5 : 7;
+  let n = 0;
+  const place = r => {
+    const lat = get(r,'lat'); let lon = get(r,'lon');
+    if (lat == null) return null;
+    lon += 360 * Math.round((c.lng - lon) / 360);
+    if (!b.contains([lat, lon])) return null;
+    return map.latLngToContainerPoint([lat, lon]);
+  };
+  const shape = (p, r, fill, sz, stroke) => {
+    const sog = get(r,'sog') || 0, dir = get(r,'hdg') ?? get(r,'cog');
+    ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = sz > 4 ? 1.2 : .6;
+    ctx.beginPath();
+    if (sog >= .5 && dir != null && sz >= 3.4){
+      const a = dir * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
+      const pt = (x, y) => [p.x + x*cs - y*sn, p.y + x*sn + y*cs];
+      ctx.moveTo(...pt(0, -sz*1.6)); ctx.lineTo(...pt(sz, sz*1.1)); ctx.lineTo(...pt(0, sz*.5)); ctx.lineTo(...pt(-sz, sz*1.1));
+      ctx.closePath();
+    } else ctx.arc(p.x, p.y, sz * .8, 0, 7);
+    ctx.fill(); if (sz > 3) ctx.stroke();
+  };
   for (const r of SHIPS){
-    const lat = get(r,'lat'); if (lat == null) continue;
-    const ll = L.latLng(lat, get(r,'lon')); if (!b.contains(ll)) continue;
-    if (++n > 2500) break;
-    L.circleMarker(ll, {renderer:canvas, radius:4, weight:1, color:'#fff', fillColor: (get(r,'sog')||0) >= .5 ? '#1f5f99' : '#7f8fa3', fillOpacity:.9})
-      .on('click', () => openShip(r)).addTo(nearLayer);
+    if (fleetSet.has(r)) continue;
+    const p = place(r); if (!p) continue;
+    n++; shape(p, r, colorOf(get(r,'type')), s, 'rgba(0,0,0,.55)'); drawn.push([p.x, p.y, r]);
   }
+  if (prefs.names && z >= 11 && n < 450){
+    ctx.font = '600 12px Barlow, sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    for (const [x, y, r] of drawn){ const t = get(r,'name'); if (!t) continue;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,18,30,.85)'; ctx.strokeText(t, x + 10, y); ctx.fillStyle = '#e6edf4'; ctx.fillText(t, x + 10, y); }
+  }
+  // my ships go on top: larger, magenta, always named
+  ctx.font = '700 13px "Barlow Semi Condensed", Barlow, sans-serif'; ctx.textBaseline = 'middle';
+  for (const r of fleetSet){
+    const p = place(r); if (!p) continue;
+    shape(p, r, '#ec4f9e', Math.max(s, 6.5), '#fff'); drawn.push([p.x, p.y, r, true]);
+    const t = get(r,'name') || ''; const w = ctx.measureText(t).width;
+    ctx.fillStyle = 'rgba(236,79,158,.95)'; ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(p.x + 12, p.y - 10, w + 12, 20, 6); else ctx.rect(p.x + 12, p.y - 10, w + 12, 20);
+    ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(t, p.x + 18, p.y + .5);
+  }
+  if (shipOpen){ const p = place(shipOpen); if (p){ ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, 16, 0, 7); ctx.stroke(); } }
+  const el = $('#count');
+  if (!SHIPS.length){ el.textContent = el.dataset.msg || 'Загружаю базу судов…'; return; }
+  el.innerHTML = `<b>${n.toLocaleString('ru')}</b> судов на экране`;
 }
-map.on('moveend', drawNear);
-$('#b-near').onclick = e => { showNear = !showNear; e.currentTarget.setAttribute('aria-pressed', showNear); drawNear(); };
-$('#b-sea').onclick = e => { const on = !map.hasLayer(seamarks); on ? seamarks.addTo(map) : map.removeLayer(seamarks); e.currentTarget.setAttribute('aria-pressed', on); };
+map.on('move resize viewreset zoomend', draw);
+map.on('zoomstart', () => { zooming = true; draw(); });
+map.on('zoomend', () => { zooming = false; draw(); });
+map.on('click', e => {
+  let best = null, bd = 20 * 20;
+  for (const d of drawn){ const dx = d[0] - e.containerPoint.x, dy = d[1] - e.containerPoint.y, q = dx*dx + dy*dy - (d[3] ? 120 : 0); if (q < bd){ bd = q; best = d[2]; } }
+  $('#menu').classList.remove('on');
+  if (best) openShip(best, false);
+});
 
-/* ---------- rendering ---------- */
+/* ---------- where am I ---------- */
+let meMarker = null;
+function locate(then){
+  if (!navigator.geolocation){ toast('Этот браузер не умеет определять место'); return; }
+  toast('Определяю, где ты…');
+  navigator.geolocation.getCurrentPosition(p => {
+    myPos = L.latLng(p.coords.latitude, p.coords.longitude);
+    if (!meMarker) meMarker = L.marker(myPos, {icon:L.divIcon({className:'', html:'<div class="me"></div>', iconSize:[18,18], iconAnchor:[9,9]}), zIndexOffset:1000, interactive:false}).addTo(map);
+    else meMarker.setLatLng(myPos);
+    if (then) then();
+    flyVisible(myPos, Math.max(map.getZoom(), 10));
+  }, err => toast(err.code === 1 ? 'Нет доступа к геопозиции: разреши его в настройках браузера' : 'Не получилось определить место, попробуй ещё раз'),
+  {enableHighAccuracy:true, timeout:12000, maximumAge:60000});
+}
+
+/* ---------- sheet & tabs ---------- */
+const sheet = $('#sheet');
+function openSheet(title){ $('#stitle').textContent = title; sheet.classList.add('on'); }
+function setTab(t){
+  tab = t; shipOpen = null;
+  if (t === 'map' && desktop()) t = 'fleet';
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === (desktop() ? t : tab)));
+  if (t === 'map'){ sheet.classList.remove('on', 'full'); draw(); return; }
+  if (t === 'fleet') renderFleet();
+  if (t === 'search') renderSearch();
+  if (t === 'near'){ renderNear(); if (!myPos) locate(renderNear); }
+  draw();
+}
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+$('#sclose').onclick = () => setTab('map');
+$('#sbox').onclick = () => setTab('search');
+{ let y0 = null, moved = false; const g = $('#grab');
+  g.addEventListener('pointerdown', e => { y0 = e.clientY; moved = false; g.setPointerCapture(e.pointerId); });
+  g.addEventListener('pointermove', e => { if (y0 != null && Math.abs(e.clientY - y0) > 8) moved = true; });
+  g.addEventListener('pointerup', e => { if (y0 == null) return; const dy = e.clientY - y0; y0 = null;
+    if (!moved) return sheet.classList.toggle('full');
+    if (dy > 40) sheet.classList.contains('full') ? sheet.classList.remove('full') : setTab('map');
+    else if (dy < -40) sheet.classList.add('full'); }); }
+
+/* ---------- lists ---------- */
 function stateLine(r){
   const ts = get(r,'tpos'), sog = get(r,'sog');
   if (!ts) return {cls:'', txt:'позиции пока нет'};
-  const old = Date.now()/1000 - ts > 2*86400;
-  if (old) return {cls:'old', txt:'вне зоны береговых станций'};
+  if (Date.now()/1000 - ts > 2*86400) return {cls:'old', txt:'вне зоны береговых станций'};
   if ((sog||0) >= .5) return {cls:'go', txt:`${sog.toFixed(1)} уз${get(r,'dest') ? ', на ' + get(r,'dest') : ''}`};
   return {cls:'stop', txt: NAV[get(r,'nav')] || 'стоит'};
 }
-function rowHtml(r, note, i){
-  const s = stateLine(r), mine = inFleet(r) >= 0;
-  return `<li class="row${mine ? ' mine' : ''}" data-i="${i}" tabindex="0">
+function rowHtml(r, i, extra){
+  const s = stateLine(r);
+  return `<li class="row${fleetSet.has(r) ? ' mine' : ''}" data-i="${i}" tabindex="0">
     <span class="flag" aria-hidden="true">${flagOf(get(r,'mmsi'))}</span>
-    <span class="nm">${esc(get(r,'name') || 'Без названия')}</span>
-    <span class="ago">${esc(ago(get(r,'tpos')))}</span>
-    <span class="meta"><span class="dot ${s.cls}"></span>${esc(s.txt)}${get(r,'imo') ? ', IMO ' + esc(get(r,'imo')) : ''}</span>
-    ${note ? `<span class="note">${esc(note)}</span>` : ''}</li>`;
+    <span class="nm">${esc(get(r,'name') || 'MMSI ' + get(r,'mmsi'))}</span>
+    <span class="right">${esc(extra && extra.right ? extra.right : ago(get(r,'tpos')))}</span>
+    <span class="meta"><span class="dot ${s.cls}"></span>${esc(s.txt)}</span>
+    <span class="meta">${esc(typeName(get(r,'type')))}${get(r,'imo') ? ', IMO ' + esc(get(r,'imo')) : ''}${get(r,'len') ? ', ' + esc(get(r,'len')) + ' м' : ''}</span>
+    ${extra && extra.note ? `<span class="note">${esc(extra.note)}</span>` : ''}</li>`;
 }
-function bindRows(list, rows){
-  list.querySelectorAll('.row').forEach(li => {
-    const go = () => openShip(rows[+li.dataset.i]);
-    li.onclick = go; li.onkeydown = e => { if (e.key === 'Enter') go(); };
-  });
+function bindRows(el, rows){
+  el.querySelectorAll('.row[data-i]').forEach(li => { const go = () => openShip(rows[+li.dataset.i], true); li.onclick = go; li.onkeydown = e => { if (e.key === 'Enter') go(); }; });
 }
+const statusLine = () => SHIPS.length ? `<p class="status">В базе ${SHIPS.length.toLocaleString('ru')} судов. Обновлено ${esc(ago(updated))}, обновляется каждые 30 минут.</p>` : '';
 
 function renderFleet(){
-  const body = $('#body');
+  openSheet('Мои суда');
+  const body = $('#sbody');
   if (!fleet.length){
     body.innerHTML = `<div class="empty"><strong>Здесь будут суда, на которых ты работал</strong>
-      Найди судно в поиске по названию, IMO или MMSI и нажми «Добавить в мой флот». Его позиция появится на карте.</div>
-      <button class="btn main" id="go-s">Найти судно</button>${transferHtml()}`;
-    $('#go-s').onclick = () => setTab('search');
-    bindTransfer(); return;
+      Найди судно по названию, IMO или MMSI и нажми «Добавить в мои суда». На карте оно будет малиновым и с названием.</div>
+      <div class="btns"><button class="btn main" id="go-s">Найти судно</button></div>${transferHtml()}${statusLine()}`;
+    $('#go-s').onclick = () => setTab('search'); bindTransfer(); return;
   }
   const rows = [], pending = [];
-  fleet.forEach(e => { const r = findShip(e); r ? rows.push([r, e]) : pending.push(e); });
+  fleet.forEach(e => { const r = findShip(e); if (r) rows.push([r, e]); else pending.push(e); });
   rows.sort((a, b) => (get(b[0],'tpos')||0) - (get(a[0],'tpos')||0));
-  body.innerHTML = `<ul class="list" id="fl">${rows.map(([r, e], i) => rowHtml(r, e.note, i)).join('')}</ul>
+  body.innerHTML = `<ul class="list" id="fl">${rows.map(([r, e], i) => rowHtml(r, i, {note:e.note})).join('')}</ul>
     ${pending.length ? `<p class="hint" style="margin-top:16px">Ждут первого сигнала AIS:</p><ul class="list">${pending.map((e, i) =>
       `<li class="row" style="cursor:default"><span class="flag">⏳</span><span class="nm">${esc(e.name || (e.imo ? 'IMO ' + e.imo : 'MMSI ' + e.mmsi))}</span>
-       <button class="btn quiet" data-rm="${i}">Убрать</button><span class="meta">Появится, когда судно даст сигнал у берега</span></li>`).join('')}</ul>` : ''}
-    <div class="btns"><button class="btn" id="fit">Показать всех на карте</button><button class="btn" id="add">Добавить судно</button></div>${transferHtml()}`;
+       <button class="btn" style="min-height:36px" data-rm="${i}">Убрать</button><span class="meta">Появится, когда судно даст сигнал у берега</span>${e.note ? `<span class="note">${esc(e.note)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+    <div class="btns"><button class="btn" id="fit">Показать все на карте</button><button class="btn" id="add">Добавить судно</button></div>${transferHtml()}${statusLine()}`;
   bindRows($('#fl'), rows.map(x => x[0]));
-  body.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { const e = pending[+b.dataset.rm]; fleet = fleet.filter(x => x !== e); save(); renderFleet(); });
+  body.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { const e = pending[+b.dataset.rm]; fleet = fleet.filter(x => x !== e); saveFleet(); renderFleet(); });
   $('#fit').onclick = fitFleet; $('#add').onclick = () => setTab('search');
   bindTransfer();
 }
@@ -277,144 +399,151 @@ function transferHtml(){
   return `<details><summary>Перенести список на другое устройство</summary>
     <p class="hint">Список хранится в этом браузере. Скопируй код и вставь его на другом телефоне или компьютере.</p>
     <div class="btns"><button class="btn" id="cp">Скопировать код</button></div>
-    <label class="f" for="imp">Вставить код с другого устройства</label>
-    <textarea id="imp" placeholder="Вставь код сюда"></textarea>
+    <label class="f" for="imp">Код с другого устройства</label><textarea id="imp" placeholder="Вставь код сюда"></textarea>
     <div class="btns"><button class="btn" id="imp-b">Загрузить список</button></div></details>`;
 }
 function bindTransfer(){
   $('#cp').onclick = async () => {
     const code = btoa(unescape(encodeURIComponent(JSON.stringify(fleet))));
-    try { await navigator.clipboard.writeText(code); toast('Код скопирован'); }
-    catch(e){ $('#imp').value = code; $('#imp').select(); toast('Скопируй код из поля ниже'); }
+    try { await navigator.clipboard.writeText(code); toast('Код скопирован'); } catch(e){ $('#imp').value = code; $('#imp').select(); toast('Скопируй код из поля ниже'); }
   };
   $('#imp-b').onclick = () => {
     try {
-      const list = JSON.parse(decodeURIComponent(escape(atob($('#imp').value.trim()))));
-      if (!Array.isArray(list)) throw 0;
+      const list = JSON.parse(decodeURIComponent(escape(atob($('#imp').value.trim())))); if (!Array.isArray(list)) throw 0;
       let added = 0;
-      for (const e of list) if ((e.imo || e.mmsi) && !fleet.some(x => (e.imo && x.imo == e.imo) || (e.mmsi && x.mmsi == e.mmsi))) { fleet.push(e); added++; }
-      save(); renderFleet(); toast(`Добавлено судов: ${added}`);
+      for (const e of list) if ((e.imo || e.mmsi) && !fleet.some(x => (e.imo && x.imo == e.imo) || (e.mmsi && x.mmsi == e.mmsi))){ fleet.push(e); added++; }
+      saveFleet(); renderFleet(); toast(`Добавлено судов: ${added}`);
     } catch(e){ toast('Код не распознан. Скопируй его целиком'); }
   };
 }
 
 function search(q){
   q = q.trim().toUpperCase(); if (!q) return [];
-  if (/^\d{7}$/.test(q)) { const r = byImo.get(+q); return r ? [r] : []; }
-  if (/^\d{9}$/.test(q)) { const r = byMmsi.get(+q); return r ? [r] : []; }
+  if (/^\d{7}$/.test(q)){ const r = byImo.get(+q); return r ? [r] : []; }
+  if (/^\d{9}$/.test(q)){ const r = byMmsi.get(+q); return r ? [r] : []; }
   const out = [];
   for (const r of SHIPS){
     const n = get(r,'name') || '', p = get(r,'prev') || '';
-    let score = n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : p.includes(q) ? 3 : (String(get(r,'imo')||'').startsWith(q) || String(get(r,'mmsi')).startsWith(q)) ? 4 : -1;
-    if (score >= 0) out.push([score, r]);
+    const sc = n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : p.includes(q) ? 3 : (String(get(r,'imo')||'').startsWith(q) || String(get(r,'mmsi')).startsWith(q)) ? 4 : -1;
+    if (sc >= 0) out.push([sc + (get(r,'imo') ? 0 : .5), r]);
   }
-  return out.sort((a, b) => a[0] - b[0] || (get(b[1],'tpos')||0) - (get(a[1],'tpos')||0)).slice(0, 60).map(x => x[1]);
+  return out.sort((a, b) => a[0] - b[0] || (get(b[1],'tpos')||0) - (get(a[1],'tpos')||0)).slice(0, 80).map(x => x[1]);
 }
 function renderSearch(){
-  const body = $('#body');
-  body.innerHTML = `<div class="search"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg>
-    <input id="q" type="search" inputmode="search" autocomplete="off" placeholder="Название, IMO или MMSI" value="${esc(view.q)}"></div><div id="res"></div>`;
-  const q = $('#q'); q.oninput = () => { view.q = q.value; renderResults(); };
-  if (matchMedia('(min-width:761px)').matches) q.focus();
+  openSheet('Поиск судна');
+  $('#sbody').innerHTML = `<div class="search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg>
+    <input id="q" type="search" inputmode="search" autocomplete="off" autocapitalize="characters" placeholder="Название, IMO или MMSI" value="${esc(query)}"></div><div id="res"></div>`;
+  const q = $('#q'); q.oninput = () => { query = q.value; renderResults(); };
+  setTimeout(() => q.focus(), 300);
   renderResults();
 }
 function renderResults(){
-  const box = $('#res'), q = view.q.trim();
-  if (!q){ box.innerHTML = `<p class="hint">Ищи по названию судна, номеру IMO (7 цифр) или MMSI (9 цифр). Переименованные суда находятся и по старому названию.</p>`; return; }
+  const box = $('#res'), q = query.trim();
+  if (!q){ box.innerHTML = `<p class="hint">Ищи по названию судна, IMO (7 цифр) или MMSI (9 цифр). Переименованное судно находится и по старому названию.</p>${statusLine()}`; return; }
   const rows = search(q);
   if (!rows.length){
     const num = /^\d{7}$|^\d{9}$/.test(q);
-    box.innerHTML = `<div class="empty"><strong>В нашей базе пока нет «${esc(q)}»</strong>
-      База пополняется сама, когда суда проходят рядом с береговыми станциями AIS. Можно поискать в официальной базе Equasis${num ? ' или сразу добавить судно в флот: оно появится, когда даст сигнал' : ''}.</div>
-      <div class="btns">${num ? `<button class="btn main" id="addnum">Добавить ${q.length === 7 ? 'IMO' : 'MMSI'} ${esc(q)} в мой флот</button>` : ''}
+    box.innerHTML = `<div class="empty"><strong>В базе пока нет «${esc(q)}»</strong>
+      База пополняется каждые полчаса, когда суда проходят рядом с береговыми станциями AIS.${num ? ' Можно уже сейчас добавить судно в свои: оно появится, когда даст сигнал.' : ' Можно поискать в официальной базе Equasis.'}</div>
+      <div class="btns">${num ? `<button class="btn main" id="addnum">Добавить ${q.length === 7 ? 'IMO' : 'MMSI'} ${esc(q)} в мои суда</button>` : ''}
       <a class="btn" href="https://www.equasis.org/" target="_blank" rel="noopener">Открыть Equasis</a></div>`;
-    if (num) $('#addnum').onclick = () => { fleet.push(q.length === 7 ? {imo:+q, added:Date.now()} : {mmsi:+q, added:Date.now()}); save(); toast('Добавлено в мой флот'); setTab('fleet'); };
+    if (num) $('#addnum').onclick = () => { fleet.push(q.length === 7 ? {imo:+q, added:Date.now()} : {mmsi:+q, added:Date.now()}); saveFleet(); toast('Добавлено в мои суда'); setTab('fleet'); };
     return;
   }
-  box.innerHTML = `<p class="hint">Найдено: ${rows.length}${rows.length === 60 ? '+' : ''}</p><ul class="list" id="rl">${rows.map((r, i) => rowHtml(r, '', i)).join('')}</ul>`;
+  box.innerHTML = `<p class="hint">Найдено: ${rows.length}${rows.length === 80 ? '+' : ''}</p><ul class="list" id="rl">${rows.map((r, i) => rowHtml(r, i)).join('')}</ul>`;
   bindRows($('#rl'), rows);
 }
 
-function openShip(r){
-  view.ship = r; renderShip();
+function renderNear(){
+  openSheet('Суда рядом');
+  const body = $('#sbody');
+  if (!myPos){ body.innerHTML = `<div class="empty"><strong>Определяю, где ты</strong>Если браузер спросит про геопозицию, нажми «Разрешить».</div><div class="btns"><button class="btn main" id="loc2">Определить место</button></div>`; $('#loc2').onclick = () => locate(renderNear); return; }
+  const list = [];
+  for (const r of SHIPS){ const lat = get(r,'lat'); if (lat == null || Math.abs(lat - myPos.lat) > 1.5) continue;
+    const d = nm(myPos, [lat, get(r,'lon')]); if (d <= 50) list.push([d, r]); }
+  list.sort((a, b) => a[0] - b[0]);
+  const rows = list.slice(0, 150);
+  body.innerHTML = rows.length ? `<p class="hint">В радиусе 50 миль: ${list.length}. Ближайшие сверху.</p><ul class="list" id="nl">${rows.map(([d, r], i) => rowHtml(r, i, {right: fmtNm(d)})).join('')}</ul>`
+    : `<div class="empty"><strong>В 50 милях от тебя судов в базе нет</strong>База пока молодая: суда появятся после следующих обновлений.</div>`;
+  if (rows.length) bindRows($('#nl'), rows.map(x => x[1]));
+}
+
+function openShip(r, fly){
+  shipOpen = r; renderShip();
   if (get(r,'lat') != null){
-    pickLayer.clearLayers();
-    if (inFleet(r) < 0) L.marker([get(r,'lat'), get(r,'lon')], {icon:hull(r, false), zIndexOffset:900}).addTo(pickLayer);
-    map.flyTo([get(r,'lat'), get(r,'lon')], Math.max(map.getZoom(), 7), {duration:.8});
+    const ll = [get(r,'lat'), get(r,'lon')];
+    flyVisible(L.latLng(ll), fly ? Math.max(map.getZoom(), 10) : map.getZoom());
   }
-  if (matchMedia('(max-width:760px)').matches) window.scrollTo({top:0, behavior:'smooth'});
+  draw();
 }
 function renderShip(){
-  const r = view.ship, idx = inFleet(r), e = fleet[idx], imo = get(r,'imo'), mmsi = get(r,'mmsi');
-  const c = iso(mmsi), s = stateLine(r), sog = get(r,'sog'), dir = get(r,'hdg') ?? get(r,'cog');
-  const L1 = get(r,'len'), B = get(r,'beam');
-  const facts = [
-    ['IMO', imo], ['MMSI', mmsi], ['Позывной', get(r,'call')], ['Флаг', c ? regionName(c) : ''],
-    ['Тип по AIS', typeName(get(r,'type'))], ['Размеры', L1 ? `${L1} × ${B || '?'} м` : ''],
-    ['Осадка', get(r,'draught') ? get(r,'draught') + ' м' : ''], ['Назначение', get(r,'dest')],
-    ['ETA по AIS', get(r,'eta')], ['Прежние имена', (get(r,'prev') || '').split('|').filter(Boolean).join(', ')],
-    ['Координаты', get(r,'lat') != null ? `${get(r,'lat').toFixed(3)}, ${get(r,'lon').toFixed(3)}` : ''],
-  ].filter(x => x[1] !== '' && x[1] != null);
-  $('#body').innerHTML = `<div class="ship">
-    <button class="btn quiet back" id="bk">‹ Назад</button>
+  const r = shipOpen, idx = fleetIdx(r), e = fleet[idx], imo = get(r,'imo'), mmsi = get(r,'mmsi');
+  const c = iso(mmsi), s = stateLine(r), sog = get(r,'sog'), dir = get(r,'hdg') ?? get(r,'cog'), nav = NAV[get(r,'nav')];
+  const dist = myPos && get(r,'lat') != null ? fmtNm(nm(myPos, [get(r,'lat'), get(r,'lon')])) : '';
+  const facts = [['IMO', imo], ['MMSI', mmsi], ['Позывной', get(r,'call')], ['Флаг', c ? regionName(c) : ''],
+    ['Тип по AIS', typeName(get(r,'type'))], ['Размеры', get(r,'len') ? `${get(r,'len')} × ${get(r,'beam') || '?'} м` : ''],
+    ['Осадка', get(r,'draught') ? get(r,'draught') + ' м' : ''], ['Назначение', get(r,'dest')], ['ETA по AIS', get(r,'eta')],
+    ['От меня', dist], ['Прежние имена', (get(r,'prev') || '').split('|').filter(Boolean).join(', ')],
+    ['Координаты', get(r,'lat') != null ? `${get(r,'lat').toFixed(4)}, ${get(r,'lon').toFixed(4)}` : '']].filter(x => x[1] !== '' && x[1] != null);
+  openSheet(get(r,'name') || 'MMSI ' + mmsi);
+  $('#sbody').innerHTML = `
     <p class="sub">${flagOf(mmsi)} ${esc(c ? regionName(c) : 'флаг неизвестен')}, ${esc(typeName(get(r,'type')))}</p>
-    <h2>${esc(get(r,'name') || 'Без названия')}</h2>
     <div class="now">
       <div><b>${sog != null ? esc(sog.toFixed(1)) : '–'}</b><span>узлов</span></div>
       <div><b>${dir != null ? esc(Math.round(dir)) + '°' : '–'}</b><span>курс</span></div>
-      <div><b>${esc(NAV[get(r,'nav')] ? NAV[get(r,'nav')].split(' ')[0] === 'на' ? NAV[get(r,'nav')] : NAV[get(r,'nav')] : '–')}</b><span>статус</span></div>
+      <div><b>${esc(nav || '–')}</b><span>статус</span></div>
       <p><span class="dot ${s.cls}"></span>Позиция ${esc(ago(get(r,'tpos')))}${get(r,'tpos') ? ' (' + esc(fmtDate(get(r,'tpos'))) + ')' : ''}</p>
     </div>
-    <div class="btns">${idx >= 0 ? `<button class="btn" id="rm">Убрать из флота</button>` : `<button class="btn main" id="ad">Добавить в мой флот</button>`}
+    <div class="btns">${idx >= 0 ? `<button class="btn" id="rm">Убрать из моих судов</button>` : `<button class="btn main" id="ad">Добавить в мои суда</button>`}
       ${get(r,'lat') != null ? `<button class="btn" id="sh">На карте</button>` : ''}</div>
     ${idx >= 0 ? `<label class="f" for="nt">Мои заметки: годы, должность, рейсы</label><textarea id="nt" placeholder="Например: 2021–2022, AB, контракт 6 мес.">${esc(e.note || '')}</textarea>` : ''}
     <dl>${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    <p class="hint">Тип по AIS не различает балкер и контейнеровоз. Полные характеристики, владелец и инспекции есть в Equasis.</p>
+    <p class="hint">AIS не различает балкер и контейнеровоз. Полные характеристики, владелец и инспекции есть в Equasis.</p>
     <div class="links">
       ${imo ? `<a class="btn" target="_blank" rel="noopener" href="https://www.equasis.org/EquasisWeb/restricted/ShipInfo?fs=Search&P_IMO=${encodeURIComponent(imo)}">Equasis</a>
       <a class="btn" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">Фото судна</a>
       <a class="btn" target="_blank" rel="noopener" href="https://www.vesselfinder.com/vessels/details/${encodeURIComponent(imo)}">VesselFinder</a>` : ''}
       <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${encodeURIComponent(mmsi)}">MarineTraffic</a>
-    </div></div>`;
-  $('#bk').onclick = () => { view.ship = null; pickLayer.clearLayers(); render(); };
-  if ($('#sh')) $('#sh').onclick = () => map.flyTo([get(r,'lat'), get(r,'lon')], 9, {duration:.8});
-  if ($('#ad')) $('#ad').onclick = () => { fleet.push({imo: imo || null, mmsi, name: get(r,'name'), note:'', added:Date.now()}); save(); toast('Добавлено в мой флот'); renderShip(); };
-  if ($('#rm')) $('#rm').onclick = () => { fleet.splice(idx, 1); save(); toast('Убрано из флота'); renderShip(); };
-  if ($('#nt')) $('#nt').onchange = ev => { e.note = ev.target.value.trim(); save(); toast('Заметка сохранена'); };
+    </div>`;
+  if ($('#sh')) $('#sh').onclick = () => { if (!desktop()) sheet.classList.remove('full'); map.flyTo([get(r,'lat'), get(r,'lon')], 12, {duration:.8}); };
+  if ($('#ad')) $('#ad').onclick = () => { fleet.push({imo: imo || null, mmsi, name: get(r,'name'), note:'', added:Date.now()}); saveFleet(); toast('Добавлено в мои суда'); renderShip(); };
+  if ($('#rm')) $('#rm').onclick = () => { fleet.splice(idx, 1); saveFleet(); toast('Убрано из моих судов'); renderShip(); };
+  if ($('#nt')) $('#nt').onchange = ev => { e.note = ev.target.value.trim(); saveFleet(); toast('Заметка сохранена'); };
 }
 
-function save(){ store.set(fleet); $('#fleetN').textContent = fleet.length ? fleet.length : ''; drawFleet(); }
-function setTab(t){ view.tab = t; view.ship = null; pickLayer.clearLayers(); render(); }
-function render(){
-  $('#t-fleet').setAttribute('aria-selected', view.tab === 'fleet');
-  $('#t-search').setAttribute('aria-selected', view.tab === 'search');
-  if (view.ship) return renderShip();
-  view.tab === 'fleet' ? renderFleet() : renderSearch();
-}
+function saveFleet(){ if (!ls.set('fleet.v1', fleet)) toast('Браузер не сохраняет данные: список пропадёт после закрытия'); refreshFleetSet(); draw(); }
 function fitFleet(){
-  const pts = drawFleet();
-  if (pts.length === 1) map.flyTo(pts[0], 7); else if (pts.length) map.flyToBounds(pts, {padding:[40, 40], maxZoom:7});
-  else toast('У судов флота пока нет позиций');
+  const pts = [...fleetSet].filter(r => get(r,'lat') != null).map(r => [get(r,'lat'), get(r,'lon')]);
+  if (!pts.length){ toast(fleet.length ? 'У моих судов пока нет позиций' : 'Добавь свои суда через поиск'); return; }
+  if (!desktop()) setTab('map');
+  if (pts.length === 1) map.flyTo(pts[0], 9); else map.flyToBounds(pts, {padding:[60, 60], maxZoom:9});
 }
-$('#t-fleet').onclick = () => setTab('fleet');
-$('#t-search').onclick = () => setTab('search');
+
+/* ---------- controls ---------- */
+$('#f-loc').onclick = () => locate(() => { if (tab === 'near' || desktop()) setTab('near'); });
+$('#f-fleet').onclick = fitFleet;
+$('#f-layers').onclick = e => { const m = $('#menu'), on = !m.classList.contains('on'); m.classList.toggle('on', on); e.currentTarget.setAttribute('aria-expanded', on); };
+document.querySelectorAll('[data-base]').forEach(b => b.onclick = () => { prefs.base = b.dataset.base; applyPrefs(); });
+$('#m-sea').onclick = () => { prefs.sea = !prefs.sea; applyPrefs(); };
+$('#m-names').onclick = () => { prefs.names = !prefs.names; applyPrefs(); };
+map.on('movestart', () => $('#menu').classList.remove('on'));
+addEventListener('resize', () => { map.invalidateSize(); draw(); });
 
 /* ---------- data ---------- */
+$('#legend').innerHTML = GROUPS.map(g => `<span><i style="background:${g[1]}"></i>${esc(g[0])}</span>`).join('') + `<span><i style="background:#ec4f9e"></i>Мои суда</span>`;
+applyPrefs(); refreshFleetSet();
+if (desktop()) setTab('fleet');
 fetch('data/ships.json', {cache:'no-cache'}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
   d.fields.forEach((f, i) => F[f] = i);
   SHIPS = d.ships; updated = d.updated;
   for (const r of SHIPS){ byMmsi.set(get(r,'mmsi'), r); if (get(r,'imo')) byImo.set(get(r,'imo'), r); }
-  // fill in names for ships added by number before they were seen
   fleet.forEach(e => { const r = findShip(e); if (r){ e.name = get(r,'name'); if (!e.mmsi) e.mmsi = get(r,'mmsi'); } });
-  store.set(fleet);
-  $('#status').textContent = `В базе ${SHIPS.length.toLocaleString('ru')} судов, обновлено ${ago(updated)}`;
-  render(); const pts = drawFleet();
-  if (pts.length) map.fitBounds(pts, {padding:[40, 40], maxZoom:6});
-}).catch(() => {
-  $('#status').textContent = 'База ещё не собрана: сборщик пока не запускался';
-  render();
-});
-save(); render();
+  ls.set('fleet.v1', fleet); refreshFleetSet();
+  const pts = [...fleetSet].filter(r => get(r,'lat') != null).map(r => [get(r,'lat'), get(r,'lon')]);
+  if (pts.length) map.fitBounds(pts, {padding:[60, 60], maxZoom:7});
+  if (sheet.classList.contains('on')) setTab(tab === 'map' ? 'fleet' : tab);
+  draw();
+}).catch(() => { $('#count').dataset.msg = 'База ещё не собрана: подожди первого обновления'; draw(); });
 }
 </script>
 </body>

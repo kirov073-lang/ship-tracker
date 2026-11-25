@@ -89,10 +89,6 @@ def apply_static(ships, mmsi, msg, ts):
     imo = int(msg.get("ImoNumber") or 0)
     typ = int(msg.get("Type") or 0)
     name = clean(msg.get("Name"))
-    known = mmsi in ships
-    # Keep merchant/passenger ships: those with an IMO number or a cargo/tanker/passenger type.
-    if not known and imo <= 0 and not (60 <= typ <= 89):
-        return False
     row = ships.get(mmsi) or blank(mmsi)
     old = row[IDX["name"]]
     if old and name and old != name:
@@ -204,13 +200,25 @@ def merge_positions(ships, pending):
     for mmsi, p in pending.items():
         row = ships.get(mmsi)
         if row is None:
-            continue  # identity unknown yet; it arrives with the ship's static message
+            if not p["name"]:
+                continue  # nothing to show for an unnamed, unidentified target
+            row = ships[mmsi] = blank(mmsi)
         for k in ("lat", "lon", "sog", "cog", "hdg", "nav", "tpos"):
             row[IDX[k]] = p[k]
         if not row[IDX["name"]] and p["name"]:
             row[IDX["name"]] = p["name"]
         n += 1
     return n
+
+
+def prune(ships):
+    """Forget small craft that have been silent for two weeks; ships with an IMO stay forever."""
+    cutoff = now() - 14 * 86400
+    gone = [m for m, r in ships.items()
+            if not r[IDX["imo"]] and (r[IDX["tpos"]] or r[IDX["tstatic"]] or 0) < cutoff]
+    for m in gone:
+        del ships[m]
+    return len(gone)
 
 
 def write(ships, stats, prev_meta):
@@ -253,6 +261,7 @@ def main():
         asyncio.run(listen(ships, pending, stats))
         stats["positions"] = merge_positions(ships, pending)
         stats["listened"] = True
+    stats["pruned"] = prune(ships)
     else:
         print("AISSTREAM_KEY is not set: publishing previous data only")
     write(ships, stats, load_prev_meta())
