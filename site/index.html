@@ -101,6 +101,7 @@ dt{color:var(--soft)}dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap
 .photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .photo a.btn{position:relative}
 .cap{font-size:12px;color:var(--soft);margin:0 0 6px;overflow-wrap:anywhere}.cap a{color:var(--soft)}
+.sec{font:600 15px Barlow,sans-serif;color:var(--soft);margin:20px 0 6px;letter-spacing:.2px}
 .links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 label.f{display:block;font-size:14px;color:var(--soft);margin:12px 0 4px}
 textarea{width:100%;min-height:76px;border:1px solid var(--line);border-radius:12px;background:var(--chrome2);padding:10px 12px;font-size:16px;resize:vertical}
@@ -582,8 +583,10 @@ function renderShip(){
     <div class="btns">${idx >= 0 ? `<button class="btn" id="rm">Убрать из моих судов</button>` : `<button class="btn main" id="ad">Добавить в мои суда</button>`}
       ${get(r,'lat') != null ? `<button class="btn" id="sh">На карте</button>` : ''}</div>
     ${idx >= 0 ? `<label class="f" for="nt">Мои заметки: годы, должность, рейсы</label><textarea id="nt" placeholder="Например: 2021–2022, AB, контракт 6 мес.">${esc(e.note || '')}</textarea>` : ''}
+    <h3 class="sec">По данным AIS</h3>
     <dl>${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    <p class="hint">AIS не различает балкер и контейнеровоз. Полные характеристики, владелец и инспекции есть в Equasis.</p>
+    <div id="passport"></div>
+    <h3 class="sec">Полная информация</h3>
     <div class="links">
       ${imo ? `<a class="btn" target="_blank" rel="noopener" href="https://www.equasis.org/EquasisWeb/restricted/ShipInfo?fs=Search&P_IMO=${encodeURIComponent(imo)}">Equasis</a>
       <a class="btn" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">Фото судна</a>
@@ -594,6 +597,7 @@ function renderShip(){
   if ($('#sh')) $('#sh').onclick = () => { if (!desktop()) sheet.classList.remove('full'); flyVisible([get(r,'lat'), get(r,'lon')], 12); };
   if ($('#ad')) $('#ad').onclick = () => { fleet.push({imo: imo || null, mmsi, name: get(r,'name'), note:'', added:Date.now()}); saveFleet(); toast('Добавлено в мои суда'); renderShip(); };
   if ($('#rm')) $('#rm').onclick = () => { fleet.splice(idx, 1); saveFleet(); toast('Убрано из моих судов'); renderShip(); };
+  if (imo) loadPassport(imo, r);
   if ($('#nt')) $('#nt').onchange = ev => { e.note = ev.target.value.trim(); saveFleet(); toast('Заметка сохранена'); };
 }
 
@@ -607,10 +611,45 @@ async function commons(params){
   pages.sort((a, b) => (a.index || 0) - (b.index || 0));
   return pages[0] || null;
 }
+/* Ship passport from Wikidata (free, open): builder, year, tonnage, owner, operator, port */
+const WD = 'https://www.wikidata.org/w/api.php?format=json&origin=*&';
+const wdCache = new Map();
+async function wikidataId(imo){
+  if (wdCache.has('id' + imo)) return wdCache.get('id' + imo);
+  const q = await (await fetch(WD + 'action=query&list=search&srlimit=1&srsearch=' + encodeURIComponent('haswbstatement:P458=' + imo))).json();
+  const id = (q.query && q.query.search[0] && q.query.search[0].title) || null;
+  wdCache.set('id' + imo, id); return id;
+}
+const PASS = [['P176', 'Завод-строитель', 'item'], ['P617', 'Заводской номер', 'str'], ['P571', 'Построено', 'year'], ['P729', 'В строю с', 'year'],
+  ['P289', 'Серия (тип судна)', 'item'], ['P1093', 'Валовая вместимость (GT)', 'qty'], ['P2043', 'Длина', 'm'], ['P2049', 'Ширина', 'm'],
+  ['P2262', 'Осадка', 'm'], ['P127', 'Владелец', 'item'], ['P137', 'Оператор', 'item'], ['P532', 'Порт приписки', 'item'], ['P8047', 'Флаг (регистр)', 'item']];
+async function loadPassport(imo, r){
+  const box = () => $('#passport');
+  let rows = [];
+  try {
+    const id = await wikidataId(imo); if (!id) return;
+    const e = (await (await fetch(WD + 'action=wbgetentities&props=claims&ids=' + id)).json()).entities[id];
+    const items = new Set(), raw = [];
+    for (const [pid, label, kind] of PASS){
+      const c = e.claims && e.claims[pid]; if (!c) continue;
+      const v = c.map(x => x.mainsnak.datavalue && x.mainsnak.datavalue.value).filter(Boolean)[0]; if (!v) continue;
+      if (kind === 'item'){ items.add(v.id); raw.push([label, kind, v.id]); }
+      else if (kind === 'year') raw.push([label, kind, String(v.time).slice(1, 5)]);
+      else if (kind === 'str') raw.push([label, kind, v]);
+      else raw.push([label, kind, Math.round(parseFloat(v.amount) * 10) / 10]);
+    }
+    let names = {};
+    if (items.size){
+      const l = await (await fetch(WD + 'action=wbgetentities&props=labels&languages=ru|en&ids=' + [...items].join('|'))).json();
+      for (const [k, v] of Object.entries(l.entities || {})) names[k] = (v.labels.ru || v.labels.en || {}).value || k;
+    }
+    rows = raw.map(([label, kind, v]) => [label, kind === 'item' ? names[v] : kind === 'm' ? v + ' м' : kind === 'qty' ? Number(v).toLocaleString('ru') : v]);
+    if (rows.length && shipOpen === r && box()) box().innerHTML = `<h3 class="sec">Паспорт судна (Wikidata)</h3><dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+  } catch(e){}
+}
 async function viaWikidata(imo){
   // ships in Wikidata carry their IMO number (P458) and often a photo (P18)
-  const q = await (await fetch('https://www.wikidata.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=1&srsearch=' + encodeURIComponent('haswbstatement:P458=' + imo))).json();
-  const id = q.query && q.query.search[0] && q.query.search[0].title; if (!id) return null;
+  const id = await wikidataId(imo); if (!id) return null;
   const e = await (await fetch('https://www.wikidata.org/w/api.php?action=wbgetclaims&format=json&origin=*&property=P18&entity=' + id)).json();
   const f = e.claims && e.claims.P18 && e.claims.P18[0] && e.claims.P18[0].mainsnak.datavalue && e.claims.P18[0].mainsnak.datavalue.value;
   return f ? await commons('titles=' + encodeURIComponent('File:' + f)) : null;
