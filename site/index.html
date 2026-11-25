@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="">
 <style>
 /*
 VOICE   bridge instrument: calm, exact, no decoration
@@ -25,12 +26,11 @@ LAYOUT  phone: chart + bottom tabs + sheet; desktop: side panel + chart
 html,body{height:100%;margin:0;overflow:hidden;background:var(--chrome);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overscroll-behavior:none}
 button,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--mag);outline-offset:2px}
-#map{position:fixed;top:calc(56px + env(safe-area-inset-top));left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom));background:#0b2a55}
+#map{position:fixed;top:calc(56px + env(safe-area-inset-top));left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom));background:#1c4b91}
 .hdr{position:fixed;z-index:1250;left:0;right:0;top:0;height:calc(56px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);background:#243040;display:grid;grid-template-columns:56px 1fr 56px;align-items:center;border-bottom:1px solid #1b2633}
 .hdr h1{margin:0;text-align:center;font:600 22px/1 Barlow,sans-serif;color:#fff}
 .hdr button{width:56px;height:56px;border:0;background:none;display:grid;place-items:center;cursor:pointer}
 .hdr svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
-#ships{position:absolute;inset:0;pointer-events:none;z-index:450}
 .leaflet-container{font:14px Barlow,sans-serif}
 .leaflet-control-attribution{font-size:9px;line-height:1.2;background:none!important;color:rgba(255,255,255,.45);padding:0 4px!important;pointer-events:none}
 .leaflet-control-attribution a{color:inherit;text-decoration:none}
@@ -96,6 +96,10 @@ button,input,textarea{font:inherit;color:inherit}
 .now p{grid-column:1/-1;margin:0;font-size:14px}
 dl{display:grid;grid-template-columns:8.5em minmax(0,1fr);gap:7px 12px;margin:12px 0;font-size:15px}
 dt{color:var(--soft)}dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.photo{position:relative;aspect-ratio:16/9;border-radius:12px;background:var(--chrome2);overflow:hidden;margin:6px 0 4px;display:grid;place-items:center;color:var(--soft);font-size:14px;text-align:center;padding:0}
+.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.photo a.btn{position:relative}
+.cap{font-size:12px;color:var(--soft);margin:0 0 6px;overflow-wrap:anywhere}.cap a{color:var(--soft)}
 .links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 label.f{display:block;font-size:14px;color:var(--soft);margin:12px 0 4px}
 textarea{width:100%;min-height:76px;border:1px solid var(--line);border-radius:12px;background:var(--chrome2);padding:10px 12px;font-size:16px;resize:vertical}
@@ -133,10 +137,9 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
   <button class="fab" id="f-layers" title="Вид карты" aria-label="Вид карты" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg></button>
 </div>
 <div class="menu" id="menu" role="menu">
-  <button role="menuitemradio" data-base="hybrid">Спутник с подписями</button>
-  <button role="menuitemradio" data-base="dark">Тёмная</button>
-  <button role="menuitemradio" data-base="light">Схема</button>
-  <button role="menuitemradio" data-base="sat">Спутник без подписей</button>
+  <button role="menuitemradio" data-base="chart">Электронная карта</button>
+  <button role="menuitemradio" data-base="light">Светлая схема</button>
+  <button role="menuitemradio" data-base="hybrid">Спутник</button>
   <hr>
   <button role="menuitemcheckbox" id="m-sea">Морские знаки</button>
   <button role="menuitemcheckbox" id="m-names">Названия судов</button>
@@ -159,6 +162,8 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
 <div class="toast" id="toast" role="status"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin=""></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.js" crossorigin=""></script>
 <script>
 {
 const $ = s => document.querySelector(s);
@@ -183,7 +188,7 @@ const GROUPS = [
   ['Рыболовные', '#ff9a1f', t => t === 30],
   ['Скоростные', '#ffe21f', t => t >= 40 && t <= 49],
   ['Яхты', '#ff4dff', t => t === 36 || t === 37],
-  ['Прочие', '#c9d1d9', () => true],
+  ['Прочие', '#8aa0b6', () => true],
 ];
 const colorOf = t => GROUPS.find(g => g[2](t || 0))[1];
 const typeName = t => {
@@ -209,7 +214,7 @@ const fmtNm = d => d < 10 ? d.toFixed(1).replace('.', ',') + ' мили' : Math.
 /* ---------- state ---------- */
 let F = {}, SHIPS = [], byMmsi = new Map(), byImo = new Map(), updated = 0;
 let fleet = ls.get('fleet.v1', []);
-let prefs = Object.assign({base:'hybrid', sea:false, names:true}, ls.get('prefs.v2', {}));
+let prefs = Object.assign({base:'chart', sea:false, names:true}, ls.get('prefs.v3', {}));
 let myPos = null, tab = 'map', shipOpen = null, query = '';
 const get = (r, k) => r ? r[F[k]] : undefined;
 const findShip = e => (e.imo && byImo.get(+e.imo)) || (e.mmsi && byMmsi.get(+e.mmsi)) || null;
@@ -230,95 +235,174 @@ function flyVisible(ll, z){
   map.flyTo(map.unproject(pt, z), z, {duration:.8});
 }
 const esri = p => `https://server.arcgisonline.com/ArcGIS/rest/services/${p}/MapServer/tile/{z}/{y}/{x}`;
+/* Electronic chart: vector OpenStreetMap data (OpenFreeMap, free, no key) drawn in our own
+   colours, close to the Ship Info map: blue sea, green land, roads, ports, Russian names. */
+const NAME = ['coalesce', ['get', 'name:ru'], ['get', 'name_int'], ['get', 'name']];
+const lw = (pairs) => ['interpolate', ['exponential', 1.5], ['zoom'], ...pairs];
+const CHART = {
+  version: 8,
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sources: {omt: {type: 'vector', url: 'https://tiles.openfreemap.org/planet'}},
+  layers: [
+    {id: 'land', type: 'background', paint: {'background-color': '#2d5a45'}},
+    {id: 'wood', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['wood', 'forest']]], paint: {'fill-color': '#2a5d42', 'fill-opacity': .7}},
+    {id: 'grass', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['grass', 'farmland', 'wetland']]], paint: {'fill-color': '#33664b', 'fill-opacity': .5}},
+    {id: 'sand-ice', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['sand', 'ice', 'rock']]], paint: {'fill-color': ['match', ['get', 'class'], 'ice', '#c9d8e3', '#6f7d5e'], 'fill-opacity': .7}},
+    {id: 'urban', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['residential', 'suburb', 'neighbourhood', 'commercial', 'retail']]], paint: {'fill-color': '#3b5a58', 'fill-opacity': .55}},
+    {id: 'industry', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['industrial', 'railway', 'quarry']]], paint: {'fill-color': '#455866', 'fill-opacity': .6}},
+    {id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: {'fill-color': '#1c4b91'}},
+    {id: 'river', type: 'line', source: 'omt', 'source-layer': 'waterway', minzoom: 8, paint: {'line-color': '#1c4b91', 'line-width': lw([8, .5, 14, 4])}},
+    {id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: {'fill-color': '#4a6c62', 'fill-opacity': .8}},
+    {id: 'runway', type: 'line', source: 'omt', 'source-layer': 'aeroway', minzoom: 10, filter: ['==', ['get', 'class'], 'runway'], paint: {'line-color': '#5f6f7e', 'line-width': lw([10, 1, 15, 12])}},
+    {id: 'ferry', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['==', ['get', 'class'], 'ferry'], paint: {'line-color': '#6fa8dc', 'line-width': 1, 'line-dasharray': [3, 3], 'line-opacity': .7}},
+    {id: 'rail', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 9, filter: ['==', ['get', 'class'], 'rail'], paint: {'line-color': '#5d6a78', 'line-width': 1}},
+    {id: 'road-minor', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 12, filter: ['in', ['get', 'class'], ['literal', ['minor', 'service']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#4f6a7e', 'line-width': lw([12, .5, 17, 6])}},
+    {id: 'road-mid', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 8, filter: ['in', ['get', 'class'], ['literal', ['secondary', 'tertiary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#5f7891', 'line-width': lw([8, .4, 17, 9])}},
+    {id: 'road-main', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 5, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#7d90ab', 'line-width': lw([5, .4, 17, 12])}},
+    {id: 'border', type: 'line', source: 'omt', 'source-layer': 'boundary', filter: ['all', ['<=', ['to-number', ['get', 'admin_level'], 99], 2], ['!=', ['get', 'maritime'], 1]], paint: {'line-color': '#b4c2d2', 'line-width': 1, 'line-dasharray': [3, 2], 'line-opacity': .8}},
+    {id: 'water-name', type: 'symbol', source: 'omt', 'source-layer': 'water_name', layout: {'text-field': NAME, 'text-font': ['Noto Sans Italic'], 'text-size': ['match', ['get', 'class'], 'ocean', 16, 'sea', 14, 12], 'text-letter-spacing': .1, 'text-max-width': 8}, paint: {'text-color': '#8fb6ea', 'text-halo-color': '#123566', 'text-halo-width': 1}},
+    {id: 'road-name', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 12, layout: {'symbol-placement': 'line', 'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 11}, paint: {'text-color': '#c8d3df', 'text-halo-color': '#22374a', 'text-halo-width': 1}},
+    {id: 'village', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 10, filter: ['in', ['get', 'class'], ['literal', ['village', 'hamlet', 'suburb']]], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-max-width': 8}, paint: {'text-color': '#e3eaf2', 'text-halo-color': '#13263a', 'text-halo-width': 1.4}},
+    {id: 'town', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 7, filter: ['==', ['get', 'class'], 'town'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([7, 11, 14, 17]), 'text-max-width': 8}, paint: {'text-color': '#ffffff', 'text-halo-color': '#13263a', 'text-halo-width': 1.5}},
+    {id: 'city', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 4, filter: ['==', ['get', 'class'], 'city'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([4, 11, 12, 22]), 'text-max-width': 8}, paint: {'text-color': '#ffffff', 'text-halo-color': '#13263a', 'text-halo-width': 1.6}},
+    {id: 'country', type: 'symbol', source: 'omt', 'source-layer': 'place', maxzoom: 7, filter: ['==', ['get', 'class'], 'country'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([2, 11, 6, 16]), 'text-transform': 'uppercase', 'text-letter-spacing': .15, 'text-max-width': 7}, paint: {'text-color': '#dfe7f0', 'text-halo-color': '#13263a', 'text-halo-width': 1.4}},
+  ],
+};
+const CARTO = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const rasterChart = () => L.tileLayer(CARTO, {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'});
+function chartLayer(){
+  // vector map needs WebGL; without it fall back to a ready-made raster map
+  try {
+    if (!window.maplibregl || !L.maplibreGL || (maplibregl.supported && !maplibregl.supported())) throw 0;
+    const layer = L.maplibreGL({style: CHART, interactive: false, attributionControl: false, attribution: '© OpenFreeMap © OpenStreetMap'});
+    layer.once('add', () => { const m = layer.getMaplibreMap && layer.getMaplibreMap(); if (m) m.on('error', e => console.warn('chart', e && e.error)); });
+    return layer;
+  } catch(e){ return rasterChart(); }
+}
 const BASES = {
+  chart: chartLayer(),
+  light: rasterChart(),
   hybrid: L.layerGroup([
     L.tileLayer(esri('World_Imagery'), {maxZoom:19, maxNativeZoom:18, attribution:'© Esri'}),
     L.tileLayer(esri('Reference/World_Transportation'), {maxZoom:19, maxNativeZoom:18, opacity:.9}),
     L.tileLayer(esri('Reference/World_Boundaries_and_Places'), {maxZoom:19, maxNativeZoom:18})]),
-  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'}),
-  light: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'}),
-  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:18, attribution:'© Esri'}),
 };
 const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {maxZoom:18, attribution:'© OpenSeaMap'});
 let base = null;
 function applyPrefs(){
   if (base) map.removeLayer(base);
-  base = (BASES[prefs.base] || BASES.dark).addTo(map);
+  base = (BASES[prefs.base] || BASES.chart).addTo(map);
   prefs.sea ? seamarks.addTo(map) : map.removeLayer(seamarks);
   document.querySelectorAll('[data-base]').forEach(b => b.setAttribute('aria-checked', b.dataset.base === prefs.base));
   $('#m-sea').setAttribute('aria-checked', prefs.sea);
   $('#m-names').setAttribute('aria-checked', prefs.names);
-  ls.set('prefs.v2', prefs); draw();
+  ls.set('prefs.v3', prefs); draw();
 }
 
-/* every ship is drawn on one canvas, so tens of thousands stay fast */
-const cv = document.createElement('canvas'); cv.id = 'ships'; map.getContainer().appendChild(cv);
-const ctx = cv.getContext('2d');
-let drawn = [], raf = 0, zooming = false;
-function draw(){ cancelAnimationFrame(raf); raf = requestAnimationFrame(paint); }
+/* Every ship is drawn on one canvas that lives inside the map pane, so it moves
+   together with the map while dragging and zooming (no lag), and is redrawn only
+   when the movement ends. Ship symbols are pre-rendered sprites. */
+const shipsPane = map.createPane('ships'); shipsPane.style.zIndex = 450; shipsPane.style.pointerEvents = 'none';
+const R = L.canvas({padding:.6, pane:'ships'}).addTo(map);
+let drawn = [], raf = 0, nOnScreen = 0;
+const sprites = new Map();
+function mix(hex, to, t){ const n = parseInt(hex.slice(1), 16), c = [n >> 16, n >> 8 & 255, n & 255]; return `rgb(${c.map(v => Math.round(v + (to - v) * t)).join(',')})`; }
+function sprite(color, moving, k, mine){
+  const key = color + moving + k + mine; if (sprites.has(key)) return sprites.get(key);
+  const q = 3, len = k * (moving ? 2.3 : 1.7), S = Math.ceil(len + 8);
+  const c = document.createElement('canvas'); c.width = c.height = S * q;
+  const g = c.getContext('2d'); g.scale(q, q); g.translate(S / 2, S / 2);
+  g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 3; g.shadowOffsetY = 1;
+  g.beginPath();
+  if (moving){
+    // hull seen from above: sharp bow, straight sides, square stern
+    const L2 = len / 2, w = k * .5;
+    g.moveTo(0, -L2);
+    g.bezierCurveTo(w * .55, -L2 * .75, w, -L2 * .35, w, -L2 * .05);
+    g.lineTo(w, L2 * .82); g.quadraticCurveTo(w, L2, w * .7, L2);
+    g.lineTo(-w * .7, L2); g.quadraticCurveTo(-w, L2, -w, L2 * .82);
+    g.lineTo(-w, -L2 * .05);
+    g.bezierCurveTo(-w, -L2 * .35, -w * .55, -L2 * .75, 0, -L2);
+    const grad = g.createLinearGradient(0, -L2, 0, L2);
+    grad.addColorStop(0, mix(color, 255, .45)); grad.addColorStop(.45, color); grad.addColorStop(1, mix(color, 0, .25));
+    g.fillStyle = grad;
+  } else {
+    const r = len / 2;
+    g.arc(0, 0, r, 0, Math.PI * 2);
+    const grad = g.createRadialGradient(-r * .35, -r * .35, r * .1, 0, 0, r);
+    grad.addColorStop(0, mix(color, 255, .5)); grad.addColorStop(1, color);
+    g.fillStyle = grad;
+  }
+  g.fill();
+  g.shadowColor = 'transparent';
+  g.lineWidth = mine ? 1.6 : 1; g.strokeStyle = mine ? '#fff' : mix(color, 0, .6); g.stroke();
+  if (moving){ // bridge mark near the stern
+    g.fillStyle = 'rgba(255,255,255,.7)'; g.fillRect(-k * .22, len * .22, k * .44, k * .14);
+  }
+  const out = {c, S}; sprites.set(key, out); return out;
+}
+function draw(){ cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const ctx = R._ctx; if (!ctx) return;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); paint(); }); }
 function paint(){
-  const size = map.getSize(), dpr = window.devicePixelRatio || 1;
-  if (cv.width !== size.x * dpr || cv.height !== size.y * dpr){ cv.width = size.x * dpr; cv.height = size.y * dpr; cv.style.width = size.x + 'px'; cv.style.height = size.y + 'px'; }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, size.x, size.y);
+  const ctx = R._ctx, b = R._bounds; if (!ctx || !b) return;
   drawn = [];
-  if (zooming) return;
-  const z = map.getZoom(), c = map.getCenter(), b = map.getBounds().pad(.05);
-  const s = z < 4 ? 4 : z < 7 ? 5.5 : z < 10 ? 6.5 : 8;
+  const z = map.getZoom(), cLng = map.getCenter().lng, size = map.getSize();
+  const v0 = map.containerPointToLayerPoint([0, 0]), v1 = map.containerPointToLayerPoint(size);
+  const k = z < 4 ? 4.5 : z < 6 ? 5.5 : z < 9 ? 6.5 : z < 12 ? 8 : 9.5;
   let n = 0;
   const place = r => {
     const lat = get(r,'lat'); let lon = get(r,'lon');
     if (lat == null) return null;
-    lon += 360 * Math.round((c.lng - lon) / 360);
-    if (!b.contains([lat, lon])) return null;
-    return map.latLngToContainerPoint([lat, lon]);
+    lon += 360 * Math.round((cLng - lon) / 360);
+    const p = map.latLngToLayerPoint([lat, lon]);
+    return b.contains(p) ? p : null;
   };
-  const shape = (p, r, fill, sz, stroke) => {
+  const put = (p, r, color, kk, mine) => {
     const sog = get(r,'sog') || 0, dir = get(r,'hdg') ?? get(r,'cog');
-    ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = sz > 4 ? 1.2 : .6;
-    ctx.beginPath();
-    if (sog >= .5 && dir != null){
-      const a = dir * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
-      const pt = (x, y) => [p.x + x*cs - y*sn, p.y + x*sn + y*cs];
-      ctx.moveTo(...pt(0, -sz*1.5)); ctx.lineTo(...pt(sz, sz*1.1)); ctx.lineTo(...pt(-sz, sz*1.1));
-      ctx.closePath();
-    } else ctx.arc(p.x, p.y, sz * .75, 0, 7);
-    ctx.fill(); ctx.stroke();
+    const moving = sog >= .5 && dir != null, sp = sprite(color, moving, kk, mine);
+    if (moving){
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(dir * Math.PI / 180);
+      ctx.drawImage(sp.c, -sp.S / 2, -sp.S / 2, sp.S, sp.S); ctx.restore();
+    } else ctx.drawImage(sp.c, p.x - sp.S / 2, p.y - sp.S / 2, sp.S, sp.S);
   };
   for (const r of SHIPS){
     if (fleetSet.has(r)) continue;
     const p = place(r); if (!p) continue;
-    n++; shape(p, r, colorOf(get(r,'type')), s, 'rgba(20,20,20,.8)'); drawn.push([p.x, p.y, r]);
+    put(p, r, colorOf(get(r,'type')), k, false); drawn.push([p.x, p.y, r]);
+    if (p.x >= v0.x && p.x <= v1.x && p.y >= v0.y && p.y <= v1.y) n++;
   }
   if (prefs.names && z >= 9 && n < 700){
     ctx.font = '500 13px Barlow, sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     const boxes = [];   // skip a name that would overlap one already written
-    for (const [x, y, r] of drawn){ const t = get(r,'name'); if (!t) continue;
-      const w = ctx.measureText(t).width, bx = x - w/2, by = y + 9;
+    for (const [x, y, r] of drawn){
+      if (x < v0.x || x > v1.x || y < v0.y || y > v1.y) continue;
+      const t = get(r,'name'); if (!t) continue;
+      const w = ctx.measureText(t).width, bx = x - w / 2, by = y + k + 2;
       if (boxes.some(q => bx < q[0] + q[2] + 4 && q[0] < bx + w + 4 && by < q[1] + 16 && q[1] < by + 16)) continue;
       boxes.push([bx, by, w]);
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(t, bx, y + 16); ctx.fillStyle = '#fff'; ctx.fillText(t, bx, y + 16); }
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(t, bx, by + 8); ctx.fillStyle = '#fff'; ctx.fillText(t, bx, by + 8);
+    }
   }
   // my ships go on top: larger, magenta, always named
   ctx.font = '700 13px "Barlow Semi Condensed", Barlow, sans-serif'; ctx.textBaseline = 'middle';
   for (const r of fleetSet){
     const p = place(r); if (!p) continue;
-    shape(p, r, '#ec4f9e', Math.max(s, 6.5), '#fff'); drawn.push([p.x, p.y, r, true]);
+    put(p, r, '#ec4f9e', Math.max(k, 8) + 1, true); drawn.push([p.x, p.y, r, true]);
     const t = get(r,'name') || ''; const w = ctx.measureText(t).width;
     ctx.fillStyle = 'rgba(236,79,158,.95)'; ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(p.x + 12, p.y - 10, w + 12, 20, 6); else ctx.rect(p.x + 12, p.y - 10, w + 12, 20);
-    ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(t, p.x + 18, p.y + .5);
+    if (ctx.roundRect) ctx.roundRect(p.x + 14, p.y - 10, w + 12, 20, 6); else ctx.rect(p.x + 14, p.y - 10, w + 12, 20);
+    ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(t, p.x + 20, p.y + .5);
   }
-  if (shipOpen){ const p = place(shipOpen); if (p){ ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, 16, 0, 7); ctx.stroke(); } }
+  if (shipOpen){ const p = place(shipOpen); if (p){ ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, k * 1.6 + 6, 0, 7); ctx.stroke(); } }
+  nOnScreen = n;
   const el = $('#count');
   if (!SHIPS.length){ el.textContent = el.dataset.msg || 'Загружаю базу судов…'; return; }
   el.innerHTML = `<b>${n.toLocaleString('ru')}</b> судов на экране`;
 }
-map.on('move resize viewreset zoomend', draw);
-map.on('zoomstart', () => { zooming = true; draw(); });
-map.on('zoomend', () => { zooming = false; draw(); });
+R.on('update', paint);
 map.on('click', e => {
-  let best = null, bd = 20 * 20;
-  for (const d of drawn){ const dx = d[0] - e.containerPoint.x, dy = d[1] - e.containerPoint.y, q = dx*dx + dy*dy - (d[3] ? 120 : 0); if (q < bd){ bd = q; best = d[2]; } }
+  let best = null, bd = 22 * 22;
+  for (const d of drawn){ const dx = d[0] - e.layerPoint.x, dy = d[1] - e.layerPoint.y, q = dx*dx + dy*dy - (d[3] ? 150 : 0); if (q < bd){ bd = q; best = d[2]; } }
   $('#menu').classList.remove('on');
   if (best) openShip(best, false);
 });
@@ -502,6 +586,7 @@ function renderShip(){
     ['Координаты', get(r,'lat') != null ? `${get(r,'lat').toFixed(4)}, ${get(r,'lon').toFixed(4)}` : '']].filter(x => x[1] !== '' && x[1] != null);
   openSheet(get(r,'name') || 'MMSI ' + mmsi);
   $('#sbody').innerHTML = `
+    <div class="photo" id="photo">${imo ? 'Ищу фото…' : 'У судна нет номера IMO, фото найти не по чему'}</div><p class="cap" id="pcap"></p>
     <p class="sub">${flagOf(mmsi)} ${esc(c ? regionName(c) : 'флаг неизвестен')}, ${esc(typeName(get(r,'type')))}</p>
     <div class="now">
       <div><b>${sog != null ? esc(sog.toFixed(1)) : '–'}</b><span>узлов</span></div>
@@ -520,10 +605,48 @@ function renderShip(){
       <a class="btn" target="_blank" rel="noopener" href="https://www.vesselfinder.com/vessels/details/${encodeURIComponent(imo)}">VesselFinder</a>` : ''}
       <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${encodeURIComponent(mmsi)}">MarineTraffic</a>
     </div>`;
+  if (imo) loadPhoto(imo, r);
   if ($('#sh')) $('#sh').onclick = () => { if (!desktop()) sheet.classList.remove('full'); map.flyTo([get(r,'lat'), get(r,'lon')], 12, {duration:.8}); };
   if ($('#ad')) $('#ad').onclick = () => { fleet.push({imo: imo || null, mmsi, name: get(r,'name'), note:'', added:Date.now()}); saveFleet(); toast('Добавлено в мои суда'); renderShip(); };
   if ($('#rm')) $('#rm').onclick = () => { fleet.splice(idx, 1); saveFleet(); toast('Убрано из моих судов'); renderShip(); };
   if ($('#nt')) $('#nt').onchange = ev => { e.note = ev.target.value.trim(); saveFleet(); toast('Заметка сохранена'); };
+}
+
+/* Ship photo from Wikimedia Commons: an open source with free licences, searched by IMO */
+const photoCache = new Map();
+const plain = html => { const d = document.createElement('div'); d.innerHTML = html || ''; return (d.textContent || '').trim(); };
+async function commons(params){
+  const u = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&' + params;
+  const res = await fetch(u); const j = await res.json();
+  const pages = Object.values((j.query && j.query.pages) || {}).filter(p => p.imageinfo && /\.(jpe?g|png|webp)$/i.test(p.title));
+  pages.sort((a, b) => (a.index || 0) - (b.index || 0));
+  return pages[0] || null;
+}
+async function findPhoto(imo){
+  if (photoCache.has(imo)) return photoCache.get(imo);
+  let p = null;
+  try {
+    p = await commons('generator=categorymembers&gcmtype=file&gcmlimit=10&gcmtitle=' + encodeURIComponent('Category:IMO ' + imo));
+    if (!p) p = await commons('generator=search&gsrnamespace=6&gsrlimit=5&gsrsearch=' + encodeURIComponent('"IMO ' + imo + '"'));
+  } catch(e){ p = null; }
+  const out = p ? {src: p.imageinfo[0].thumburl || p.imageinfo[0].url, page: p.imageinfo[0].descriptionurl,
+    author: plain(p.imageinfo[0].extmetadata && p.imageinfo[0].extmetadata.Artist && p.imageinfo[0].extmetadata.Artist.value).slice(0, 80),
+    lic: plain(p.imageinfo[0].extmetadata && p.imageinfo[0].extmetadata.LicenseShortName && p.imageinfo[0].extmetadata.LicenseShortName.value)} : null;
+  photoCache.set(imo, out); return out;
+}
+async function loadPhoto(imo, r){
+  const ph = await findPhoto(imo);
+  if (shipOpen !== r) return;   // the user already opened another ship
+  const box = $('#photo'), cap = $('#pcap'); if (!box) return;
+  if (!ph){
+    box.innerHTML = `<div>Фото в открытых источниках не нашлось<br><a class="btn" style="margin-top:10px" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">Поискать на ShipSpotting</a></div>`;
+    return;
+  }
+  const img = new Image(); img.alt = 'Фото судна ' + (get(r,'name') || '');
+  img.onload = () => { box.textContent = ''; box.appendChild(img); };
+  img.onerror = () => { box.textContent = 'Фото не загрузилось'; };
+  img.src = ph.src;
+  if (/^https:\/\//.test(ph.page)) cap.innerHTML = `Фото: ${esc(ph.author || 'автор не указан')}${ph.lic ? ', ' + esc(ph.lic) : ''}, <a href="${esc(ph.page)}" target="_blank" rel="noopener">Wikimedia Commons</a>`;
 }
 
 function saveFleet(){ if (!ls.set('fleet.v1', fleet)) toast('Браузер не сохраняет данные: список пропадёт после закрытия'); refreshFleetSet(); draw(); }
