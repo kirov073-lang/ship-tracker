@@ -592,7 +592,7 @@ function renderShip(){
     ['Координаты', get(r,'lat') != null ? `${get(r,'lat').toFixed(4)}, ${get(r,'lon').toFixed(4)}` : '']].filter(x => x[1] !== '' && x[1] != null);
   openSheet(get(r,'name') || 'MMSI ' + mmsi);
   $('#sbody').innerHTML = `
-    <div class="photo" id="photo">${imo ? 'Ищу фото…' : 'У судна нет номера IMO, фото найти не по чему'}</div><p class="cap" id="pcap"></p>
+    <div class="photo" id="photo"></div><p class="cap" id="pcap"></p>
     <p class="sub">${flagOf(mmsi)} ${esc(c ? regionName(c) : 'флаг неизвестен')}, ${esc(typeName(get(r,'type')))}</p>
     <div class="now">
       <div><b>${sog != null ? esc(sog.toFixed(1)) : '–'}</b><span>узлов</span></div>
@@ -611,7 +611,7 @@ function renderShip(){
       <a class="btn" target="_blank" rel="noopener" href="https://www.vesselfinder.com/vessels/details/${encodeURIComponent(imo)}">VesselFinder</a>` : ''}
       <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${encodeURIComponent(mmsi)}">MarineTraffic</a>
     </div>`;
-  if (imo) loadPhoto(imo, r);
+  showPhoto(r);
   if ($('#sh')) $('#sh').onclick = () => { if (!desktop()) sheet.classList.remove('full'); map.flyTo([get(r,'lat'), get(r,'lon')], 12, {duration:.8}); };
   if ($('#ad')) $('#ad').onclick = () => { fleet.push({imo: imo || null, mmsi, name: get(r,'name'), note:'', added:Date.now()}); saveFleet(); toast('Добавлено в мои суда'); renderShip(); };
   if ($('#rm')) $('#rm').onclick = () => { fleet.splice(idx, 1); saveFleet(); toast('Убрано из моих судов'); renderShip(); };
@@ -655,21 +655,60 @@ async function findPhoto(imo, name){
     author: plain(md.Artist && md.Artist.value).slice(0, 80), lic: plain(md.LicenseShortName && md.LicenseShortName.value)} : null;
   photoCache.set(imo, out); return out;
 }
-async function loadPhoto(imo, r){
-  const ph = await findPhoto(imo, get(r,'name'));
-  if (shipOpen !== r) return;   // the user already opened another ship
+/* the user's own photos, kept in this browser (resized to keep storage small) */
+const myPhotoKey = r => 'photo.' + (get(r,'imo') || 'm' + get(r,'mmsi'));
+function pickOwnPhoto(r){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    const img = new Image(), url = URL.createObjectURL(f);
+    img.onload = () => {
+      const k = Math.min(1, 900 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      if (ls.set(myPhotoKey(r), c.toDataURL('image/jpeg', .8))){ toast('Фото сохранено'); if (shipOpen === r) showPhoto(r); }
+      else toast('Не хватило места в браузере: удали другие свои фото');
+    };
+    img.onerror = () => toast('Не получилось открыть этот файл как фото');
+    img.src = url;
+  };
+  inp.click();
+}
+function photoLinks(r){
+  const imo = get(r,'imo'), mmsi = get(r,'mmsi');
+  return `<span class="btns" style="justify-content:center;margin:10px 0 0">
+    <button class="btn main" id="own-ph">Добавить своё фото</button>
+    ${imo ? `<a class="btn" target="_blank" rel="noopener" href="https://www.vesselfinder.com/vessels/details/${encodeURIComponent(imo)}">Фото на VesselFinder</a>
+    <a class="btn" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">ShipSpotting</a>` : ''}
+    <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/${imo ? 'imo:' + encodeURIComponent(imo) : 'mmsi:' + encodeURIComponent(mmsi)}">MarineTraffic</a></span>`;
+}
+async function showPhoto(r){
   const box = $('#photo'), cap = $('#pcap'); if (!box) return;
+  const own = ls.get(myPhotoKey(r), null);
+  box.style.aspectRatio = ''; box.style.padding = ''; cap.textContent = '';
+  if (own){
+    const img = new Image(); img.alt = 'Моё фото судна'; img.src = own; box.textContent = ''; box.appendChild(img);
+    cap.innerHTML = `Моё фото. <a href="#" id="ph-rep">Заменить</a> или <a href="#" id="ph-del">удалить</a>`;
+    $('#ph-rep').onclick = e => { e.preventDefault(); pickOwnPhoto(r); };
+    $('#ph-del').onclick = e => { e.preventDefault(); try { localStorage.removeItem(myPhotoKey(r)); } catch(x){} showPhoto(r); };
+    return;
+  }
+  const imo = get(r,'imo');
+  box.textContent = imo ? 'Ищу фото…' : '';
+  const ph = imo ? await findPhoto(imo, get(r,'name')) : null;
+  if (shipOpen !== r) return;   // the user already opened another ship
   if (!ph){
     box.style.aspectRatio = 'auto'; box.style.padding = '14px';
-    box.innerHTML = `<div>Свободного фото этого судна в открытых архивах пока нет<br><span class="btns" style="justify-content:center;margin:10px 0 0"><a class="btn" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">Фото на ShipSpotting</a>
-      <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/imo:${encodeURIComponent(imo)}">На MarineTraffic</a></span></div>`;
+    box.innerHTML = `<div>${imo ? 'Свободного фото этого судна в открытых архивах пока нет' : 'У судна нет номера IMO'}<br>${photoLinks(r)}</div>`;
+    $('#own-ph').onclick = () => pickOwnPhoto(r);
     return;
   }
   const img = new Image(); img.alt = 'Фото судна ' + (get(r,'name') || '');
   img.onload = () => { box.textContent = ''; box.appendChild(img); };
   img.onerror = () => { box.textContent = 'Фото не загрузилось'; };
   img.src = ph.src;
-  if (/^https:\/\//.test(ph.page)) cap.innerHTML = `Фото: ${esc(ph.author || 'автор не указан')}${ph.lic ? ', ' + esc(ph.lic) : ''}, <a href="${esc(ph.page)}" target="_blank" rel="noopener">Wikimedia Commons</a>`;
+  if (/^https:\/\//.test(ph.page)) cap.innerHTML = `Фото: ${esc(ph.author || 'автор не указан')}${ph.lic ? ', ' + esc(ph.lic) : ''}, <a href="${esc(ph.page)}" target="_blank" rel="noopener">Wikimedia Commons</a>. <a href="#" id="ph-own">Поставить своё</a>`;
+  const o = $('#ph-own'); if (o) o.onclick = e => { e.preventDefault(); pickOwnPhoto(r); };
 }
 
 function saveFleet(){ if (!ls.set('fleet.v1', fleet)) toast('Браузер не сохраняет данные: список пропадёт после закрытия'); refreshFleetSet(); draw(); }
