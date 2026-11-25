@@ -261,9 +261,9 @@ def main():
         asyncio.run(listen(ships, pending, stats))
         stats["positions"] = merge_positions(ships, pending)
         stats["listened"] = True
-    stats["pruned"] = prune(ships)
     else:
         print("AISSTREAM_KEY is not set: publishing previous data only")
+    stats["pruned"] = prune(ships)
     write(ships, stats, load_prev_meta())
     return 0
 
