@@ -628,24 +628,41 @@ async function commons(params){
   pages.sort((a, b) => (a.index || 0) - (b.index || 0));
   return pages[0] || null;
 }
-async function findPhoto(imo){
+async function viaWikidata(imo){
+  // ships in Wikidata carry their IMO number (P458) and often a photo (P18)
+  const q = await (await fetch('https://www.wikidata.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=1&srsearch=' + encodeURIComponent('haswbstatement:P458=' + imo))).json();
+  const id = q.query && q.query.search[0] && q.query.search[0].title; if (!id) return null;
+  const e = await (await fetch('https://www.wikidata.org/w/api.php?action=wbgetclaims&format=json&origin=*&property=P18&entity=' + id)).json();
+  const f = e.claims && e.claims.P18 && e.claims.P18[0] && e.claims.P18[0].mainsnak.datavalue && e.claims.P18[0].mainsnak.datavalue.value;
+  return f ? await commons('titles=' + encodeURIComponent('File:' + f)) : null;
+}
+async function findPhoto(imo, name){
   if (photoCache.has(imo)) return photoCache.get(imo);
   let p = null;
-  try {
-    p = await commons('generator=categorymembers&gcmtype=file&gcmlimit=10&gcmtitle=' + encodeURIComponent('Category:IMO ' + imo));
-    if (!p) p = await commons('generator=search&gsrnamespace=6&gsrlimit=5&gsrsearch=' + encodeURIComponent('"IMO ' + imo + '"'));
-  } catch(e){ p = null; }
-  const out = p ? {src: p.imageinfo[0].thumburl || p.imageinfo[0].url, page: p.imageinfo[0].descriptionurl,
-    author: plain(p.imageinfo[0].extmetadata && p.imageinfo[0].extmetadata.Artist && p.imageinfo[0].extmetadata.Artist.value).slice(0, 80),
-    lic: plain(p.imageinfo[0].extmetadata && p.imageinfo[0].extmetadata.LicenseShortName && p.imageinfo[0].extmetadata.LicenseShortName.value)} : null;
+  const tries = [
+    () => viaWikidata(imo),
+    () => commons('generator=categorymembers&gcmtype=file&gcmlimit=10&gcmtitle=' + encodeURIComponent('Category:IMO ' + imo)),
+    () => commons('generator=search&gsrnamespace=6&gsrlimit=5&gsrsearch=' + encodeURIComponent('"IMO ' + imo + '"')),
+    // last resort: files whose title holds the ship's name, e.g. "Ever Ally (ship, 2023).jpg"
+    async () => { if (!name || name.length < 4) return null;
+      const hit = await commons('generator=search&gsrnamespace=6&gsrlimit=10&gsrsearch=' + encodeURIComponent('intitle:"' + name + '" ship'));
+      const norm = t => t.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+      return hit && norm(hit.title).includes(norm(name)) ? hit : null; },
+  ];
+  for (const t of tries){ try { p = await t(); } catch(e){ p = null; } if (p) break; }
+  const ii = p && p.imageinfo[0], md = (ii && ii.extmetadata) || {};
+  const out = ii ? {src: ii.thumburl || ii.url, page: ii.descriptionurl,
+    author: plain(md.Artist && md.Artist.value).slice(0, 80), lic: plain(md.LicenseShortName && md.LicenseShortName.value)} : null;
   photoCache.set(imo, out); return out;
 }
 async function loadPhoto(imo, r){
-  const ph = await findPhoto(imo);
+  const ph = await findPhoto(imo, get(r,'name'));
   if (shipOpen !== r) return;   // the user already opened another ship
   const box = $('#photo'), cap = $('#pcap'); if (!box) return;
   if (!ph){
-    box.innerHTML = `<div>Фото в открытых источниках не нашлось<br><a class="btn" style="margin-top:10px" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">Поискать на ShipSpotting</a></div>`;
+    box.style.aspectRatio = 'auto'; box.style.padding = '14px';
+    box.innerHTML = `<div>Свободного фото этого судна в открытых архивах пока нет<br><span class="btns" style="justify-content:center;margin:10px 0 0"><a class="btn" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">Фото на ShipSpotting</a>
+      <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/imo:${encodeURIComponent(imo)}">На MarineTraffic</a></span></div>`;
     return;
   }
   const img = new Image(); img.alt = 'Фото судна ' + (get(r,'name') || '');
