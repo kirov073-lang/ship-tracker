@@ -17,3 +17,5 @@
 Ограничение бесплатного AIS: только береговые станции. В открытом океане судно показывается по последней известной позиции.
 
 Проверка сборщика без интернета: `python test/mock_stream.py 15 &` и затем `AIS_URL=ws://127.0.0.1:8765 AISSTREAM_KEY=test-key LISTEN_SECONDS=4 python scripts/collector.py`.
+
+Сайт: https://kirov073-lang.github.io/ship-tracker
