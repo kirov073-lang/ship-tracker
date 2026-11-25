@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
@@ -56,12 +57,20 @@ def load_previous():
                 return json.load(fh)
         return None
     url = f"{SITE_URL}/data/ships.json?t={now()}"
-    try:
-        with urllib.request.urlopen(url, timeout=30) as r:
-            return json.load(r)
-    except Exception as e:  # first run: nothing deployed yet
-        print(f"no previous data ({e})")
-        return None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(url, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:  # first run: nothing deployed yet
+                print("no previous data (404)")
+                return None
+            err = e
+        except Exception as e:
+            err = e
+        time.sleep(10)
+    # never publish an empty database over a good one because of a network hiccup
+    raise SystemExit(f"could not load previous data: {err!r}")
 
 
 def to_index(doc):
