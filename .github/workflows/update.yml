@@ -19,7 +19,7 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 16
     steps:
       - uses: actions/checkout@v5
 
@@ -34,7 +34,7 @@ jobs:
         env:
           AISSTREAM_KEY: ${{ secrets.AISSTREAM_KEY }}
           SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-          LISTEN_SECONDS: "270"
+          LISTEN_SECONDS: "560"
         run: python scripts/collector.py
 
       - uses: actions/configure-pages@v5

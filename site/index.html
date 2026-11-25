@@ -585,7 +585,8 @@ function renderShip(){
   const r = shipOpen, idx = fleetIdx(r), e = fleet[idx], imo = get(r,'imo'), mmsi = get(r,'mmsi');
   const c = iso(mmsi), s = stateLine(r), sog = get(r,'sog'), dir = get(r,'hdg') ?? get(r,'cog'), nav = NAV[get(r,'nav')];
   const dist = myPos && get(r,'lat') != null ? fmtNm(nm(myPos, [get(r,'lat'), get(r,'lon')])) : '';
-  const facts = [['IMO', imo], ['MMSI', mmsi], ['Позывной', get(r,'call')], ['Флаг', c ? regionName(c) : ''],
+  const imoText = imo || (get(r,'tstatic') ? 'нет (судно без номера IMO)' : 'ещё не получен по AIS');
+  const facts = [['IMO', imoText], ['MMSI', mmsi], ['Позывной', get(r,'call')], ['Флаг', c ? regionName(c) : ''],
     ['Тип по AIS', typeName(get(r,'type'))], ['Размеры', get(r,'len') ? `${get(r,'len')} × ${get(r,'beam') || '?'} м` : ''],
     ['Осадка', get(r,'draught') ? get(r,'draught') + ' м' : ''], ['Назначение', get(r,'dest')], ['ETA по AIS', get(r,'eta')],
     ['От меня', dist], ['Прежние имена', (get(r,'prev') || '').split('|').filter(Boolean).join(', ')],
