@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f2a4a">
+<title>Мой флот</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+/*
+VOICE   calm bridge instrument; plain words a seaman uses
+IDEA    a paper Admiralty chart with a sea-service record beside it
+PICTURE the chart itself: my ships as magenta hulls, others as small soundings
+COLOUR  chart water, land buff, navy ink, Admiralty magenta; night = ECDIS dusk
+TYPE    Barlow Semi Condensed for names and figures, Barlow for text
+LAYOUT  panel left + chart right; on a phone chart on top, record below
+*/
+:root{color-scheme:light dark;
+--bg:light-dark(#f7f4ea,#0a1828);--panel:light-dark(#fffdf6,#0f2136);--ink:light-dark(#10284a,#dfe8f2);
+--soft:light-dark(#5b6b80,#93a6bb);--line:light-dark(#e2dccb,#1f3550);--water:light-dark(#d6eaf3,#0b2035);
+--land:light-dark(#efe3bd,#2b3226);--mag:light-dark(#a8136a,#ec5aa6);--mag-bg:light-dark(#f8e4ef,#3a1530);
+--blue:light-dark(#1f5f99,#6fb0e8);--ok:light-dark(#21714b,#5fc690);--warn:light-dark(#9a5b00,#e8b04a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overflow:hidden}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--mag);outline-offset:2px}
+.app{display:grid;grid-template-columns:minmax(0,410px) minmax(0,1fr);height:100dvh}
+.panel{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;height:100dvh;padding-top:env(safe-area-inset-top)}
+#map{height:100dvh;background:var(--water)}
+header{padding:18px 20px 10px}
+h1{font:700 30px/1.05 "Barlow Semi Condensed","Arial Narrow",sans-serif;margin:0;letter-spacing:.2px}
+.status{color:var(--soft);font-size:14px;margin-top:4px}
+.tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--line)}
+.tab{flex:1;background:none;border:0;border-bottom:3px solid transparent;padding:10px 4px 9px;min-height:44px;font:600 17px "Barlow Semi Condensed","Arial Narrow",sans-serif;color:var(--soft);cursor:pointer}
+.tab[aria-selected=true]{color:var(--ink);border-color:var(--mag)}
+.tab small{font:500 14px Barlow;color:var(--soft);margin-left:4px}
+.body{flex:1;overflow-y:auto;padding:14px 20px calc(24px + env(safe-area-inset-bottom))}
+.search{position:relative;margin-bottom:12px}
+.search input{width:100%;height:48px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);padding:0 14px 0 42px;font-size:17px}
+.search input:focus{border-color:var(--blue);outline:none}
+.search svg{position:absolute;left:13px;top:14px;width:20px;height:20px;stroke:var(--soft)}
+.hint{color:var(--soft);font-size:14px;margin:0 0 10px}
+.list{list-style:none;margin:0;padding:0}
+.row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;padding:11px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}
+.row:hover{background:var(--bg)}
+.flag{font-size:20px;line-height:1;grid-row:span 2;align-self:center}
+.nm{font:600 18px/1.2 "Barlow Semi Condensed","Arial Narrow",sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mine .nm{color:var(--mag)}
+.meta{grid-column:2/4;color:var(--soft);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ago{font-size:13px;color:var(--soft);white-space:nowrap}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--soft);vertical-align:1px}
+.dot.go{background:var(--ok)}.dot.stop{background:var(--blue)}.dot.old{background:var(--warn)}
+.note{grid-column:2/4;font-size:14px;color:var(--ink);font-style:italic}
+.empty{padding:22px 4px;color:var(--soft)}
+.empty strong{display:block;color:var(--ink);font:600 19px "Barlow Semi Condensed","Arial Narrow",sans-serif;margin-bottom:4px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);font-weight:600;cursor:pointer;text-decoration:none;color:var(--ink)}
+.btn.main{background:var(--mag);border-color:var(--mag);color:#fff}
+.btn.quiet{border-color:transparent;background:none;color:var(--blue);padding:0 6px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.back{margin:-4px 0 6px -6px}
+.ship h2{font:700 34px/1.05 "Barlow Semi Condensed","Arial Narrow",sans-serif;margin:4px 0 2px;text-wrap:balance;overflow-wrap:anywhere}
+.ship .sub{color:var(--soft);margin:0 0 4px}
+.now{background:var(--water);border-radius:10px;padding:12px 14px;margin:12px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.now b{display:block;font:600 22px/1.1 "Barlow Semi Condensed","Arial Narrow",sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+.now span{font-size:13px;color:var(--soft)}
+.now p{grid-column:1/-1;margin:0;font-size:14px}
+dl{display:grid;grid-template-columns:8.5em minmax(0,1fr);gap:7px 12px;margin:10px 0;font-size:15px}
+dt{color:var(--soft)}dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.links a{font-size:15px}
+label.f{display:block;font-size:14px;color:var(--soft);margin:12px 0 4px}
+textarea,.field{width:100%;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);padding:10px 12px;font-size:16px}
+textarea{min-height:76px;resize:vertical}
+.field{height:48px}
+details{margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600;min-height:32px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,30px);opacity:0;background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:10px;font-weight:600;transition:.25s;z-index:2000;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.leaflet-container{font:14px Barlow,sans-serif;background:var(--water)}
+.leaflet-popup-content{margin:10px 12px}
+.hull{transition:transform .3s}
+.maptools{position:absolute;right:10px;top:calc(10px + env(safe-area-inset-top));z-index:1000;display:flex;flex-direction:column;gap:6px}
+.maptools button{min-height:40px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 1px 3px rgba(16,40,74,.18)}
+.maptools button[aria-pressed=true]{background:var(--mag);color:#fff;border-color:var(--mag)}
+.mapwrap{position:relative}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .leaflet-tile-pane{filter:saturate(.7) brightness(.9)}}
+@media(max-width:760px){
+ body{overflow:auto}
+ .app{display:flex;flex-direction:column;height:auto}
+ .mapwrap{position:sticky;top:0;z-index:5;order:-1}
+ .maptools{flex-direction:row}
+ .maptools button{min-height:36px;padding:0 10px;font-size:13px}
+ #map{height:44dvh}
+ .panel{height:auto;min-height:56dvh;border-right:0;padding-top:0}
+ .body{overflow:visible}
+ h1{font-size:26px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <header>
+      <h1>Мой флот</h1>
+      <div class="status" id="status">Загружаю базу судов…</div>
+    </header>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" id="t-fleet" aria-selected="true">Мои суда<small id="fleetN"></small></button>
+      <button class="tab" role="tab" id="t-search" aria-selected="false">Поиск</button>
+    </nav>
+    <div class="body" id="body"></div>
+  </aside>
+  <div class="mapwrap">
+    <div id="map" aria-label="Карта"></div>
+    <div class="maptools">
+      <button id="b-near" aria-pressed="false">Все суда</button>
+      <button id="b-sea" aria-pressed="false">Морские знаки</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+{
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- reference tables ---------- */
+const MID = (() => {
+  const src = "201AL 202AD 203AT 204PT 205BE 206BY 207BG 208VA 209CY 210CY 211DE 212CY 213GE 214MD 215MT 216AM 218DE 219DK 220DK 224ES 225ES 226FR 227FR 228FR 229MT 230FI 231FO 232GB 233GB 234GB 235GB 236GI 237GR 238HR 239GR 240GR 241GR 242MA 243HU 244NL 245NL 246NL 247IT 248MT 249MT 250IE 251IS 252LI 253LU 254MC 255PT 256MT 257NO 258NO 259NO 261PL 262ME 263PT 264RO 265SE 266SE 267SK 268SM 269CH 270CZ 271TR 272UA 273RU 274MK 275LV 276EE 277LT 278SI 279RS 301AI 303US 304AG 305AG 306CW 307AW 308BS 309BS 310BM 311BS 312BZ 314BB 316CA 319KY 321CR 323CU 325DM 327DO 329GP 330GD 331GL 332GT 334HN 336HT 338US 339JM 341KN 343LC 345MX 347MQ 348MS 350NI 351PA 352PA 353PA 354PA 355PA 356PA 357PA 358PR 359SV 361PM 362TT 364TC 366US 367US 368US 369US 370PA 371PA 372PA 373PA 374PA 375VC 376VC 377VC 378VG 379VI 401AF 403SA 405BD 408BH 410BT 412CN 413CN 414CN 416TW 417LK 419IN 422IR 423AZ 425IQ 428IL 431JP 432JP 434TM 436KZ 437UZ 438JO 440KR 441KR 443PS 445KP 447KW 450LB 451KG 453MO 455MV 457MN 459NP 461OM 463PK 466QA 468SY 470AE 471AE 472TJ 473YE 475YE 477HK 478BA 501TF 503AU 506MM 508BN 510FM 511PW 512NZ 514KH 515KH 516CX 518CK 520FJ 523CC 525ID 529KI 531LA 533MY 536MP 538MH 540NC 542NU 544NR 546PF 548PH 550TL 553PG 555PN 557SB 559AS 561WS 563SG 564SG 565SG 566SG 567TH 570TO 572TV 574VN 576VU 577VU 578WF 601ZA 603AO 605DZ 607TF 608SH 609BI 610BJ 611BW 612CF 613CM 615CG 616KM 617CV 619CI 620KM 621DJ 622EG 624ET 625ER 626GA 627GH 629GM 630GW 631GQ 632GN 633BF 634KE 636LR 637LR 638SS 642LY 644LS 645MU 647MG 649ML 650MZ 654MR 655MW 656NE 657NG 659NA 660RE 661RW 662SD 663SN 664SC 665SH 666SO 667SL 668ST 669SZ 670TD 671TG 672TN 674TZ 675UG 676CD 677TZ 678ZM 679ZW 701AR 710BR 720BO 725CL 730CO 735EC 740FK 745GF 750GY 755PY 760PE 765SR 770UY 775VE";
+  const m = {}; for (const p of src.split(' ')) m[p.slice(0,3)] = p.slice(3); return m;
+})();
+let regionName = c => c;
+try { const dn = new Intl.DisplayNames(['ru'], {type:'region'}); regionName = c => dn.of(c) || c; } catch (e) {}
+const iso = mmsi => MID[String(mmsi).slice(0,3)] || '';
+const flagOf = mmsi => { const c = iso(mmsi); return c ? String.fromCodePoint(...[...c].map(ch => 127397 + ch.charCodeAt(0))) : '🏳'; };
+const typeName = t => {
+  if (!t) return 'тип неизвестен';
+  if (t >= 70 && t <= 79) return 'грузовое';
+  if (t >= 80 && t <= 89) return 'танкер';
+  if (t >= 60 && t <= 69) return 'пассажирское';
+  return ({30:'рыболовное',31:'буксир',32:'буксир',33:'земснаряд',35:'военное',36:'парусное',37:'прогулочное',50:'лоцманское',51:'спасательное',52:'буксир',53:'портовое',55:'полиция',58:'медицинское'})[t] || (t >= 40 && t <= 49 ? 'скоростное' : 'прочее');
+};
+const NAV = {0:'на ходу',1:'на якоре',2:'не управляется',3:'ограничено в манёвре',4:'стеснено осадкой',5:'у причала',6:'на мели',7:'ловит рыбу',8:'под парусом'};
+const rtf = new Intl.RelativeTimeFormat('ru', {numeric:'auto'});
+const ago = ts => {
+  if (!ts) return 'нет данных';
+  const s = Date.now()/1000 - ts;
+  if (s < 90) return 'только что';
+  if (s < 3600) return rtf.format(-Math.round(s/60), 'minute');
+  if (s < 86400) return rtf.format(-Math.round(s/3600), 'hour');
+  return rtf.format(-Math.round(s/86400), 'day');
+};
+const fmtDate = ts => new Date(ts*1000).toLocaleString('ru', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+
+/* ---------- state ---------- */
+let F = {}, SHIPS = [], byMmsi = new Map(), byImo = new Map(), updated = 0;
+const store = {
+  get(){ try { return JSON.parse(localStorage.getItem('fleet.v1')) || []; } catch(e){ return []; } },
+  set(v){ try { localStorage.setItem('fleet.v1', JSON.stringify(v)); } catch(e){ toast('Браузер не сохраняет данные: список пропадёт после закрытия'); } }
+};
+let fleet = store.get();
+let view = {tab:'fleet', ship:null, q:''};
+
+const get = (r, k) => r ? r[F[k]] : undefined;
+const findShip = e => (e.imo && byImo.get(+e.imo)) || (e.mmsi && byMmsi.get(+e.mmsi)) || null;
+const inFleet = r => fleet.findIndex(e => (e.imo && +e.imo === get(r,'imo')) || (e.mmsi && +e.mmsi === get(r,'mmsi')));
+
+function toast(t){ const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('on'), 2400); }
+
+/* ---------- map ---------- */
+const map = L.map('map', {zoomControl:false, worldCopyJump:true, preferCanvas:false}).setView([44, 25], 3);
+L.control.zoom({position:'bottomright'}).addTo(map);
+const dark = matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light';
+fetch('land.json').then(r => r.json()).then(g => {
+  L.geoJSON(g, {interactive:false, style:{color:getComputedStyle(document.body).getPropertyValue('--line'), weight:1, fillColor:getComputedStyle(document.body).getPropertyValue('--land'), fillOpacity:1}}).addTo(map).bringToBack();
+}).catch(()=>{});
+L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}{r}.png`, {
+  subdomains:'abcd', maxZoom:18, attribution:'© OpenStreetMap, © CARTO'}).addTo(map);
+const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {maxZoom:18, attribution:'© OpenSeaMap'});
+const canvas = L.canvas({padding:.3});
+const nearLayer = L.layerGroup().addTo(map), fleetLayer = L.layerGroup().addTo(map), pickLayer = L.layerGroup().addTo(map);
+let showNear = false;
+
+function hull(r, mine){
+  const sog = get(r,'sog') || 0, dir = get(r,'hdg') ?? get(r,'cog') ?? 0;
+  const c = mine ? 'var(--mag)' : 'var(--blue)';
+  const shape = sog >= 0.5
+    ? `<path d="M12 2 L18 20 L12 16.5 L6 20 Z" fill="${c}" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>`
+    : `<circle cx="12" cy="12" r="6" fill="${c}" stroke="#fff" stroke-width="2"/>`;
+  return L.divIcon({className:'', iconSize:[24,24], iconAnchor:[12,12],
+    html:`<svg class="hull" width="24" height="24" viewBox="0 0 24 24" style="transform:rotate(${sog >= .5 ? dir : 0}deg);overflow:visible">${shape}</svg>`});
+}
+function drawFleet(){
+  fleetLayer.clearLayers();
+  const pts = [];
+  for (const e of fleet){
+    const r = findShip(e); if (!r || get(r,'lat') == null) continue;
+    const ll = [get(r,'lat'), get(r,'lon')]; pts.push(ll);
+    L.marker(ll, {icon:hull(r, true), title:get(r,'name'), zIndexOffset:500})
+      .on('click', () => openShip(r)).bindTooltip(esc(get(r,'name')), {direction:'top', offset:[0,-10]}).addTo(fleetLayer);
+  }
+  return pts;
+}
+function drawNear(){
+  nearLayer.clearLayers();
+  if (!showNear) return;
+  if (map.getZoom() < 5){ toast('Приблизь карту, чтобы увидеть все суда в районе'); return; }
+  const b = map.getBounds().pad(.1); let n = 0;
+  for (const r of SHIPS){
+    const lat = get(r,'lat'); if (lat == null) continue;
+    const ll = L.latLng(lat, get(r,'lon')); if (!b.contains(ll)) continue;
+    if (++n > 2500) break;
+    L.circleMarker(ll, {renderer:canvas, radius:4, weight:1, color:'#fff', fillColor: (get(r,'sog')||0) >= .5 ? '#1f5f99' : '#7f8fa3', fillOpacity:.9})
+      .on('click', () => openShip(r)).addTo(nearLayer);
+  }
+}
+map.on('moveend', drawNear);
+$('#b-near').onclick = e => { showNear = !showNear; e.currentTarget.setAttribute('aria-pressed', showNear); drawNear(); };
+$('#b-sea').onclick = e => { const on = !map.hasLayer(seamarks); on ? seamarks.addTo(map) : map.removeLayer(seamarks); e.currentTarget.setAttribute('aria-pressed', on); };
+
+/* ---------- rendering ---------- */
+function stateLine(r){
+  const ts = get(r,'tpos'), sog = get(r,'sog');
+  if (!ts) return {cls:'', txt:'позиции пока нет'};
+  const old = Date.now()/1000 - ts > 2*86400;
+  if (old) return {cls:'old', txt:'вне зоны береговых станций'};
+  if ((sog||0) >= .5) return {cls:'go', txt:`${sog.toFixed(1)} уз${get(r,'dest') ? ', на ' + get(r,'dest') : ''}`};
+  return {cls:'stop', txt: NAV[get(r,'nav')] || 'стоит'};
+}
+function rowHtml(r, note, i){
+  const s = stateLine(r), mine = inFleet(r) >= 0;
+  return `<li class="row${mine ? ' mine' : ''}" data-i="${i}" tabindex="0">
+    <span class="flag" aria-hidden="true">${flagOf(get(r,'mmsi'))}</span>
+    <span class="nm">${esc(get(r,'name') || 'Без названия')}</span>
+    <span class="ago">${esc(ago(get(r,'tpos')))}</span>
+    <span class="meta"><span class="dot ${s.cls}"></span>${esc(s.txt)}${get(r,'imo') ? ', IMO ' + esc(get(r,'imo')) : ''}</span>
+    ${note ? `<span class="note">${esc(note)}</span>` : ''}</li>`;
+}
+function bindRows(list, rows){
+  list.querySelectorAll('.row').forEach(li => {
+    const go = () => openShip(rows[+li.dataset.i]);
+    li.onclick = go; li.onkeydown = e => { if (e.key === 'Enter') go(); };
+  });
+}
+
+function renderFleet(){
+  const body = $('#body');
+  if (!fleet.length){
+    body.innerHTML = `<div class="empty"><strong>Здесь будут суда, на которых ты работал</strong>
+      Найди судно в поиске по названию, IMO или MMSI и нажми «Добавить в мой флот». Его позиция появится на карте.</div>
+      <button class="btn main" id="go-s">Найти судно</button>${transferHtml()}`;
+    $('#go-s').onclick = () => setTab('search');
+    bindTransfer(); return;
+  }
+  const rows = [], pending = [];
+  fleet.forEach(e => { const r = findShip(e); r ? rows.push([r, e]) : pending.push(e); });
+  rows.sort((a, b) => (get(b[0],'tpos')||0) - (get(a[0],'tpos')||0));
+  body.innerHTML = `<ul class="list" id="fl">${rows.map(([r, e], i) => rowHtml(r, e.note, i)).join('')}</ul>
+    ${pending.length ? `<p class="hint" style="margin-top:16px">Ждут первого сигнала AIS:</p><ul class="list">${pending.map((e, i) =>
+      `<li class="row" style="cursor:default"><span class="flag">⏳</span><span class="nm">${esc(e.name || (e.imo ? 'IMO ' + e.imo : 'MMSI ' + e.mmsi))}</span>
+       <button class="btn quiet" data-rm="${i}">Убрать</button><span class="meta">Появится, когда судно даст сигнал у берега</span></li>`).join('')}</ul>` : ''}
+    <div class="btns"><button class="btn" id="fit">Показать всех на карте</button><button class="btn" id="add">Добавить судно</button></div>${transferHtml()}`;
+  bindRows($('#fl'), rows.map(x => x[0]));
+  body.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { const e = pending[+b.dataset.rm]; fleet = fleet.filter(x => x !== e); save(); renderFleet(); });
+  $('#fit').onclick = fitFleet; $('#add').onclick = () => setTab('search');
+  bindTransfer();
+}
+function transferHtml(){
+  return `<details><summary>Перенести список на другое устройство</summary>
+    <p class="hint">Список хранится в этом браузере. Скопируй код и вставь его на другом телефоне или компьютере.</p>
+    <div class="btns"><button class="btn" id="cp">Скопировать код</button></div>
+    <label class="f" for="imp">Вставить код с другого устройства</label>
+    <textarea id="imp" placeholder="Вставь код сюда"></textarea>
+    <div class="btns"><button class="btn" id="imp-b">Загрузить список</button></div></details>`;
+}
+function bindTransfer(){
+  $('#cp').onclick = async () => {
+    const code = btoa(unescape(encodeURIComponent(JSON.stringify(fleet))));
+    try { await navigator.clipboard.writeText(code); toast('Код скопирован'); }
+    catch(e){ $('#imp').value = code; $('#imp').select(); toast('Скопируй код из поля ниже'); }
+  };
+  $('#imp-b').onclick = () => {
+    try {
+      const list = JSON.parse(decodeURIComponent(escape(atob($('#imp').value.trim()))));
+      if (!Array.isArray(list)) throw 0;
+      let added = 0;
+      for (const e of list) if ((e.imo || e.mmsi) && !fleet.some(x => (e.imo && x.imo == e.imo) || (e.mmsi && x.mmsi == e.mmsi))) { fleet.push(e); added++; }
+      save(); renderFleet(); toast(`Добавлено судов: ${added}`);
+    } catch(e){ toast('Код не распознан. Скопируй его целиком'); }
+  };
+}
+
+function search(q){
+  q = q.trim().toUpperCase(); if (!q) return [];
+  if (/^\d{7}$/.test(q)) { const r = byImo.get(+q); return r ? [r] : []; }
+  if (/^\d{9}$/.test(q)) { const r = byMmsi.get(+q); return r ? [r] : []; }
+  const out = [];
+  for (const r of SHIPS){
+    const n = get(r,'name') || '', p = get(r,'prev') || '';
+    let score = n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : p.includes(q) ? 3 : (String(get(r,'imo')||'').startsWith(q) || String(get(r,'mmsi')).startsWith(q)) ? 4 : -1;
+    if (score >= 0) out.push([score, r]);
+  }
+  return out.sort((a, b) => a[0] - b[0] || (get(b[1],'tpos')||0) - (get(a[1],'tpos')||0)).slice(0, 60).map(x => x[1]);
+}
+function renderSearch(){
+  const body = $('#body');
+  body.innerHTML = `<div class="search"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg>
+    <input id="q" type="search" inputmode="search" autocomplete="off" placeholder="Название, IMO или MMSI" value="${esc(view.q)}"></div><div id="res"></div>`;
+  const q = $('#q'); q.oninput = () => { view.q = q.value; renderResults(); };
+  if (matchMedia('(min-width:761px)').matches) q.focus();
+  renderResults();
+}
+function renderResults(){
+  const box = $('#res'), q = view.q.trim();
+  if (!q){ box.innerHTML = `<p class="hint">Ищи по названию судна, номеру IMO (7 цифр) или MMSI (9 цифр). Переименованные суда находятся и по старому названию.</p>`; return; }
+  const rows = search(q);
+  if (!rows.length){
+    const num = /^\d{7}$|^\d{9}$/.test(q);
+    box.innerHTML = `<div class="empty"><strong>В нашей базе пока нет «${esc(q)}»</strong>
+      База пополняется сама, когда суда проходят рядом с береговыми станциями AIS. Можно поискать в официальной базе Equasis${num ? ' или сразу добавить судно в флот: оно появится, когда даст сигнал' : ''}.</div>
+      <div class="btns">${num ? `<button class="btn main" id="addnum">Добавить ${q.length === 7 ? 'IMO' : 'MMSI'} ${esc(q)} в мой флот</button>` : ''}
+      <a class="btn" href="https://www.equasis.org/" target="_blank" rel="noopener">Открыть Equasis</a></div>`;
+    if (num) $('#addnum').onclick = () => { fleet.push(q.length === 7 ? {imo:+q, added:Date.now()} : {mmsi:+q, added:Date.now()}); save(); toast('Добавлено в мой флот'); setTab('fleet'); };
+    return;
+  }
+  box.innerHTML = `<p class="hint">Найдено: ${rows.length}${rows.length === 60 ? '+' : ''}</p><ul class="list" id="rl">${rows.map((r, i) => rowHtml(r, '', i)).join('')}</ul>`;
+  bindRows($('#rl'), rows);
+}
+
+function openShip(r){
+  view.ship = r; renderShip();
+  if (get(r,'lat') != null){
+    pickLayer.clearLayers();
+    if (inFleet(r) < 0) L.marker([get(r,'lat'), get(r,'lon')], {icon:hull(r, false), zIndexOffset:900}).addTo(pickLayer);
+    map.flyTo([get(r,'lat'), get(r,'lon')], Math.max(map.getZoom(), 7), {duration:.8});
+  }
+  if (matchMedia('(max-width:760px)').matches) window.scrollTo({top:0, behavior:'smooth'});
+}
+function renderShip(){
+  const r = view.ship, idx = inFleet(r), e = fleet[idx], imo = get(r,'imo'), mmsi = get(r,'mmsi');
+  const c = iso(mmsi), s = stateLine(r), sog = get(r,'sog'), dir = get(r,'hdg') ?? get(r,'cog');
+  const L1 = get(r,'len'), B = get(r,'beam');
+  const facts = [
+    ['IMO', imo], ['MMSI', mmsi], ['Позывной', get(r,'call')], ['Флаг', c ? regionName(c) : ''],
+    ['Тип по AIS', typeName(get(r,'type'))], ['Размеры', L1 ? `${L1} × ${B || '?'} м` : ''],
+    ['Осадка', get(r,'draught') ? get(r,'draught') + ' м' : ''], ['Назначение', get(r,'dest')],
+    ['ETA по AIS', get(r,'eta')], ['Прежние имена', (get(r,'prev') || '').split('|').filter(Boolean).join(', ')],
+    ['Координаты', get(r,'lat') != null ? `${get(r,'lat').toFixed(3)}, ${get(r,'lon').toFixed(3)}` : ''],
+  ].filter(x => x[1] !== '' && x[1] != null);
+  $('#body').innerHTML = `<div class="ship">
+    <button class="btn quiet back" id="bk">‹ Назад</button>
+    <p class="sub">${flagOf(mmsi)} ${esc(c ? regionName(c) : 'флаг неизвестен')}, ${esc(typeName(get(r,'type')))}</p>
+    <h2>${esc(get(r,'name') || 'Без названия')}</h2>
+    <div class="now">
+      <div><b>${sog != null ? esc(sog.toFixed(1)) : '–'}</b><span>узлов</span></div>
+      <div><b>${dir != null ? esc(Math.round(dir)) + '°' : '–'}</b><span>курс</span></div>
+      <div><b>${esc(NAV[get(r,'nav')] ? NAV[get(r,'nav')].split(' ')[0] === 'на' ? NAV[get(r,'nav')] : NAV[get(r,'nav')] : '–')}</b><span>статус</span></div>
+      <p><span class="dot ${s.cls}"></span>Позиция ${esc(ago(get(r,'tpos')))}${get(r,'tpos') ? ' (' + esc(fmtDate(get(r,'tpos'))) + ')' : ''}</p>
+    </div>
+    <div class="btns">${idx >= 0 ? `<button class="btn" id="rm">Убрать из флота</button>` : `<button class="btn main" id="ad">Добавить в мой флот</button>`}
+      ${get(r,'lat') != null ? `<button class="btn" id="sh">На карте</button>` : ''}</div>
+    ${idx >= 0 ? `<label class="f" for="nt">Мои заметки: годы, должность, рейсы</label><textarea id="nt" placeholder="Например: 2021–2022, AB, контракт 6 мес.">${esc(e.note || '')}</textarea>` : ''}
+    <dl>${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    <p class="hint">Тип по AIS не различает балкер и контейнеровоз. Полные характеристики, владелец и инспекции есть в Equasis.</p>
+    <div class="links">
+      ${imo ? `<a class="btn" target="_blank" rel="noopener" href="https://www.equasis.org/EquasisWeb/restricted/ShipInfo?fs=Search&P_IMO=${encodeURIComponent(imo)}">Equasis</a>
+      <a class="btn" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">Фото судна</a>
+      <a class="btn" target="_blank" rel="noopener" href="https://www.vesselfinder.com/vessels/details/${encodeURIComponent(imo)}">VesselFinder</a>` : ''}
+      <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${encodeURIComponent(mmsi)}">MarineTraffic</a>
+    </div></div>`;
+  $('#bk').onclick = () => { view.ship = null; pickLayer.clearLayers(); render(); };
+  if ($('#sh')) $('#sh').onclick = () => map.flyTo([get(r,'lat'), get(r,'lon')], 9, {duration:.8});
+  if ($('#ad')) $('#ad').onclick = () => { fleet.push({imo: imo || null, mmsi, name: get(r,'name'), note:'', added:Date.now()}); save(); toast('Добавлено в мой флот'); renderShip(); };
+  if ($('#rm')) $('#rm').onclick = () => { fleet.splice(idx, 1); save(); toast('Убрано из флота'); renderShip(); };
+  if ($('#nt')) $('#nt').onchange = ev => { e.note = ev.target.value.trim(); save(); toast('Заметка сохранена'); };
+}
+
+function save(){ store.set(fleet); $('#fleetN').textContent = fleet.length ? fleet.length : ''; drawFleet(); }
+function setTab(t){ view.tab = t; view.ship = null; pickLayer.clearLayers(); render(); }
+function render(){
+  $('#t-fleet').setAttribute('aria-selected', view.tab === 'fleet');
+  $('#t-search').setAttribute('aria-selected', view.tab === 'search');
+  if (view.ship) return renderShip();
+  view.tab === 'fleet' ? renderFleet() : renderSearch();
+}
+function fitFleet(){
+  const pts = drawFleet();
+  if (pts.length === 1) map.flyTo(pts[0], 7); else if (pts.length) map.flyToBounds(pts, {padding:[40, 40], maxZoom:7});
+  else toast('У судов флота пока нет позиций');
+}
+$('#t-fleet').onclick = () => setTab('fleet');
+$('#t-search').onclick = () => setTab('search');
+
+/* ---------- data ---------- */
+fetch('data/ships.json', {cache:'no-cache'}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
+  d.fields.forEach((f, i) => F[f] = i);
+  SHIPS = d.ships; updated = d.updated;
+  for (const r of SHIPS){ byMmsi.set(get(r,'mmsi'), r); if (get(r,'imo')) byImo.set(get(r,'imo'), r); }
+  // fill in names for ships added by number before they were seen
+  fleet.forEach(e => { const r = findShip(e); if (r){ e.name = get(r,'name'); if (!e.mmsi) e.mmsi = get(r,'mmsi'); } });
+  store.set(fleet);
+  $('#status').textContent = `В базе ${SHIPS.length.toLocaleString('ru')} судов, обновлено ${ago(updated)}`;
+  render(); const pts = drawFleet();
+  if (pts.length) map.fitBounds(pts, {padding:[40, 40], maxZoom:6});
+}).catch(() => {
+  $('#status').textContent = 'База ещё не собрана: сборщик пока не запускался';
+  render();
+});
+save(); render();
+}
+</script>
+</body>
+</html>
