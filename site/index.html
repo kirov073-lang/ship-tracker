@@ -9,7 +9,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="">
 <style>
 /*
@@ -31,12 +30,14 @@ button,input,textarea{font:inherit;color:inherit}
 .hdr h1{margin:0;text-align:center;font:600 22px/1 Barlow,sans-serif;color:#fff}
 .hdr button{width:56px;height:56px;border:0;background:none;display:grid;place-items:center;cursor:pointer}
 .hdr svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
-.leaflet-container{font:14px Barlow,sans-serif}
-.leaflet-control-attribution{font-size:9px;line-height:1.2;background:none!important;color:rgba(255,255,255,.45);padding:0 4px!important;pointer-events:none}
-.leaflet-control-attribution a{color:inherit;text-decoration:none}
-.leaflet-top.leaflet-right{top:0}
-.leaflet-bar{border:1px solid var(--line)!important;box-shadow:none!important}
-.leaflet-bar a{background:rgba(13,27,42,.92)!important;color:var(--ink)!important;border-bottom-color:var(--line)!important;width:40px!important;height:40px!important;line-height:40px!important}
+.maplibregl-ctrl-group{background:rgba(13,27,42,.92)!important;border:1px solid var(--line);box-shadow:none!important;border-radius:10px!important}
+.maplibregl-ctrl-group button{width:40px!important;height:40px!important}
+.maplibregl-ctrl-group button+button{border-top:1px solid var(--line)!important}
+.maplibregl-ctrl-group .maplibregl-ctrl-icon{filter:invert(1)}
+.maplibregl-ctrl-attrib{font-size:10px;background:rgba(13,27,42,.55)!important;color:rgba(255,255,255,.7)}
+.maplibregl-ctrl-attrib a{color:rgba(255,255,255,.8)!important}
+.maplibregl-ctrl-attrib-button{filter:invert(1);opacity:.6}
+.now div:nth-child(3) b{white-space:normal;font-size:19px;line-height:1.15}
 
 .fabs{position:fixed;z-index:1000;right:12px;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 34px);display:flex;flex-direction:column;gap:10px}
 .fab{width:64px;height:64px;border-radius:50%;border:2px solid #3a6ea8;background:rgba(36,48,64,.92);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(8px)}
@@ -118,7 +119,6 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
  #map{left:420px;bottom:0}
  .hdr{left:420px}
  .count{left:436px;bottom:24px}.fabs{bottom:24px}.menu{bottom:24px}
- .leaflet-top.leaflet-right{top:10px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -137,9 +137,9 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
   <button class="fab" id="f-layers" title="Вид карты" aria-label="Вид карты" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg></button>
 </div>
 <div class="menu" id="menu" role="menu">
-  <button role="menuitemradio" data-base="chart">Электронная карта</button>
-  <button role="menuitemradio" data-base="light">Светлая схема</button>
   <button role="menuitemradio" data-base="hybrid">Спутник</button>
+  <button role="menuitemradio" data-base="chart">Схема, как Google</button>
+  <button role="menuitemradio" data-base="light">Светлая простая</button>
   <hr>
   <button role="menuitemcheckbox" id="m-sea">Морские знаки</button>
   <button role="menuitemcheckbox" id="m-names">Названия судов</button>
@@ -161,9 +161,7 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
 </nav>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin=""></script>
-<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.js" crossorigin=""></script>
 <script>
 {
 const $ = s => document.querySelector(s);
@@ -214,7 +212,7 @@ const fmtNm = d => d < 10 ? d.toFixed(1).replace('.', ',') + ' мили' : Math.
 /* ---------- state ---------- */
 let F = {}, SHIPS = [], byMmsi = new Map(), byImo = new Map(), updated = 0;
 let fleet = ls.get('fleet.v1', []);
-let prefs = Object.assign({base:'chart', sea:false, names:true}, ls.get('prefs.v3', {}));
+let prefs = Object.assign({base:'hybrid', sea:false, names:true}, ls.get('prefs.v5', {}));
 let myPos = null, tab = 'map', shipOpen = null, query = '';
 const get = (r, k) => r ? r[F[k]] : undefined;
 const findShip = e => (e.imo && byImo.get(+e.imo)) || (e.mmsi && byMmsi.get(+e.mmsi)) || null;
@@ -222,196 +220,176 @@ const fleetIdx = r => fleet.findIndex(e => (e.imo && +e.imo === get(r,'imo')) ||
 let fleetSet = new Set();
 function refreshFleetSet(){ fleetSet = new Set(fleet.map(findShip).filter(Boolean)); const b = $('#badge'); b.hidden = !fleet.length; b.textContent = fleet.length; }
 
-/* ---------- map ---------- */
-const map = L.map('map', {zoomControl:false, worldCopyJump:true, minZoom:2, maxZoom:18}).setView([46, 30], 4);
-map.attributionControl.setPrefix(false);
-L.control.zoom({position:'topright'}).addTo(map);
-const nm = (a, b) => map.distance(a, b) / 1852;
+/* ---------- map ----------
+   One engine (MapLibre GL) draws both the basemap and the ships on the GPU, so ships never
+   drift from the map while zooming. Basemap: OpenFreeMap professional styles (free, no key). */
+const OFM = n => 'https://tiles.openfreemap.org/styles/' + n;
+const NAME = ['coalesce', ['get', 'name:ru'], ['get', 'name:latin'], ['get', 'name']];
+// Satellite like the Apple map in Ship Info: Esri imagery + our own Russian labels from OpenStreetMap
+const SAT = {version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sources: {sat: {type: 'raster', tileSize: 256, maxzoom: 18, attribution: '© Esri, Maxar, Earthstar Geographics',
+    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}']},
+    omt: {type: 'vector', url: 'https://tiles.openfreemap.org/planet', attribution: '© OpenStreetMap'}},
+  layers: [
+    {id: 'sat', type: 'raster', source: 'sat', paint: {'raster-brightness-max': .88, 'raster-saturation': -.05, 'raster-contrast': .08}},
+    {id: 'border', type: 'line', source: 'omt', 'source-layer': 'boundary', filter: ['all', ['<=', ['to-number', ['get', 'admin_level'], 99], 2], ['!=', ['get', 'maritime'], 1]],
+      paint: {'line-color': '#d58cc0', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, .6, 10, 1.6], 'line-opacity': .85}},
+    {id: 'road-main', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk']]],
+      paint: {'line-color': '#f3d27a', 'line-width': ['interpolate', ['linear'], ['zoom'], 7, .5, 14, 3], 'line-opacity': .7}},
+    {id: 'road-mid', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 11, filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary']]],
+      paint: {'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, .4, 16, 2.5], 'line-opacity': .5}},
+    {id: 'water-name', type: 'symbol', source: 'omt', 'source-layer': 'water_name',
+      layout: {'text-field': NAME, 'text-font': ['Noto Sans Italic'], 'text-size': ['match', ['get', 'class'], 'ocean', 17, 'sea', 15, 12], 'text-letter-spacing': .2, 'text-max-width': 7},
+      paint: {'text-color': '#7fa7e6', 'text-halo-color': 'rgba(10,25,60,.6)', 'text-halo-width': 1}},
+    {id: 'village', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 11, filter: ['in', ['get', 'class'], ['literal', ['village', 'suburb']]],
+      layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 12}, paint: {'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,.75)', 'text-halo-width': 1.4}},
+    {id: 'town', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 8, filter: ['==', ['get', 'class'], 'town'],
+      layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 8, 11, 14, 15]}, paint: {'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,.75)', 'text-halo-width': 1.5}},
+    {id: 'city', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 4, filter: ['==', ['get', 'class'], 'city'],
+      layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 4, 12, 12, 20], 'text-anchor': 'left', 'text-offset': [.5, 0],
+        'icon-image': 'city-dot', 'icon-size': 1},
+      paint: {'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,.75)', 'text-halo-width': 1.6}},
+    {id: 'country', type: 'symbol', source: 'omt', 'source-layer': 'place', maxzoom: 7, filter: ['==', ['get', 'class'], 'country'],
+      layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 2, 11, 6, 15], 'text-transform': 'uppercase', 'text-letter-spacing': .12, 'text-max-width': 8},
+      paint: {'text-color': '#e7b3d3', 'text-halo-color': 'rgba(30,20,40,.55)', 'text-halo-width': 1.2}},
+  ]};
+const STYLES = {chart: OFM('liberty'), light: OFM('positron'), hybrid: SAT};
+const map = new maplibregl.Map({container: 'map', style: STYLES[prefs.base] || STYLES.hybrid, center: [30, 46], zoom: 3,
+  minZoom: 1.5, maxZoom: 18, attributionControl: {compact: true}, dragRotate: false, pitchWithRotate: false});
+map.touchZoomRotate.disableRotation();
+map.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right');
+const R_EARTH_NM = 3440.065;
+const nm = (a, b) => { const r = Math.PI / 180, la1 = a.lat * r, la2 = b[0] * r, dla = la2 - la1, dlo = (b[1] - a.lng) * r;
+  return 2 * R_EARTH_NM * Math.asin(Math.sqrt(Math.sin(dla / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dlo / 2) ** 2)); };
 // on a phone the sheet covers the lower part of the map: aim at the visible part above it
 function flyVisible(ll, z){
-  z = z ?? map.getZoom();
   const cover = !desktop() && sheet.classList.contains('on') ? sheet.getBoundingClientRect().height : 0;
-  const pt = map.project(ll, z).add([0, cover / 2]);
-  map.flyTo(map.unproject(pt, z), z, {duration:.8});
+  map.flyTo({center: [ll.lng ?? ll[1], ll.lat ?? ll[0]], zoom: z ?? map.getZoom(), padding: {top: 0, bottom: cover, left: 0, right: 0}, duration: 800});
 }
-const esri = p => `https://server.arcgisonline.com/ArcGIS/rest/services/${p}/MapServer/tile/{z}/{y}/{x}`;
-/* Electronic chart: vector OpenStreetMap data (OpenFreeMap, free, no key) drawn in
-   Google-Maps-like colours, with Russian names where they exist. */
-const NAME = ['coalesce', ['get', 'name:ru'], ['get', 'name_int'], ['get', 'name']];
-const lw = (pairs) => ['interpolate', ['exponential', 1.5], ['zoom'], ...pairs];
-const CHART = {   // palette of Google Maps (light): pale land, light-blue water, white roads, yellow highways
-  version: 8,
-  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
-  sources: {omt: {type: 'vector', url: 'https://tiles.openfreemap.org/planet'}},
-  layers: [
-    {id: 'land', type: 'background', paint: {'background-color': '#f5f3ef'}},
-    {id: 'wood', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['wood', 'forest']]], paint: {'fill-color': '#cfe8c4', 'fill-opacity': .8}},
-    {id: 'grass', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['grass', 'wetland']]], paint: {'fill-color': '#dcefd2', 'fill-opacity': .7}},
-    {id: 'sand-ice', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['sand', 'ice', 'rock']]], paint: {'fill-color': ['match', ['get', 'class'], 'ice', '#ffffff', '#f2ead6']}},
-    {id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: {'fill-color': '#c8e6c0', 'fill-opacity': .8}},
-    {id: 'urban', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['residential', 'suburb', 'neighbourhood']]], paint: {'fill-color': '#eceae6', 'fill-opacity': .8}},
-    {id: 'commercial', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['commercial', 'retail', 'industrial', 'railway']]], paint: {'fill-color': '#e9e5f0', 'fill-opacity': .8}},
-    {id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: {'fill-color': '#aadaff'}},
-    {id: 'river', type: 'line', source: 'omt', 'source-layer': 'waterway', minzoom: 8, paint: {'line-color': '#aadaff', 'line-width': lw([8, .6, 14, 5])}},
-    {id: 'runway', type: 'line', source: 'omt', 'source-layer': 'aeroway', minzoom: 10, filter: ['==', ['get', 'class'], 'runway'], paint: {'line-color': '#dadce0', 'line-width': lw([10, 1, 15, 14])}},
-    {id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: {'fill-color': '#e8e6e3', 'fill-outline-color': '#dad7d2'}},
-    {id: 'ferry', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['==', ['get', 'class'], 'ferry'], paint: {'line-color': '#5c9bd6', 'line-width': 1, 'line-dasharray': [3, 3]}},
-    {id: 'rail', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 10, filter: ['==', ['get', 'class'], 'rail'], paint: {'line-color': '#c4c7cc', 'line-width': 1}},
-    {id: 'road-minor-case', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 13, filter: ['in', ['get', 'class'], ['literal', ['minor', 'service', 'tertiary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#dcdcdc', 'line-width': lw([13, 1.5, 18, 14])}},
-    {id: 'road-minor', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 11, filter: ['in', ['get', 'class'], ['literal', ['minor', 'service', 'tertiary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#ffffff', 'line-width': lw([11, .6, 18, 12])}},
-    {id: 'road-mid-case', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 9, filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#d6d6d6', 'line-width': lw([9, 1.4, 18, 18])}},
-    {id: 'road-mid', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#ffffff', 'line-width': lw([7, .6, 18, 16])}},
-    {id: 'road-main-case', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 6, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#f2b84b', 'line-width': lw([6, 1, 18, 22])}},
-    {id: 'road-main', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 5, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#fde293', 'line-width': lw([5, .6, 18, 19])}},
-    {id: 'border', type: 'line', source: 'omt', 'source-layer': 'boundary', filter: ['all', ['<=', ['to-number', ['get', 'admin_level'], 99], 2], ['!=', ['get', 'maritime'], 1]], paint: {'line-color': '#9aa0a6', 'line-width': 1.1, 'line-dasharray': [4, 2]}},
-    {id: 'water-name', type: 'symbol', source: 'omt', 'source-layer': 'water_name', layout: {'text-field': NAME, 'text-font': ['Noto Sans Italic'], 'text-size': ['match', ['get', 'class'], 'ocean', 16, 'sea', 14, 12], 'text-letter-spacing': .08, 'text-max-width': 8}, paint: {'text-color': '#4a83b8', 'text-halo-color': '#aadaff', 'text-halo-width': 1}},
-    {id: 'road-name', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 13, layout: {'symbol-placement': 'line', 'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 11}, paint: {'text-color': '#5f6368', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
-    {id: 'village', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 10, filter: ['in', ['get', 'class'], ['literal', ['village', 'hamlet', 'suburb']]], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-max-width': 8}, paint: {'text-color': '#5f6368', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
-    {id: 'town', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 7, filter: ['==', ['get', 'class'], 'town'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': lw([7, 11, 14, 16]), 'text-max-width': 8}, paint: {'text-color': '#3c4043', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
-    {id: 'city', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 4, filter: ['==', ['get', 'class'], 'city'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([4, 11, 12, 20]), 'text-max-width': 8}, paint: {'text-color': '#202124', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6}},
-    {id: 'country', type: 'symbol', source: 'omt', 'source-layer': 'place', maxzoom: 7, filter: ['==', ['get', 'class'], 'country'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': lw([2, 11, 6, 15]), 'text-max-width': 7}, paint: {'text-color': '#5f6368', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
-  ],
-};
-const CARTO = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const rasterChart = () => L.tileLayer(CARTO, {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'});
-function chartLayer(){
-  // vector map needs WebGL; without it fall back to a ready-made raster map
-  try {
-    if (!window.maplibregl || !L.maplibreGL || (maplibregl.supported && !maplibregl.supported())) throw 0;
-    const layer = L.maplibreGL({style: CHART, interactive: false, attributionControl: false, attribution: '© OpenFreeMap © OpenStreetMap'});
-    layer.once('add', () => { const m = layer.getMaplibreMap && layer.getMaplibreMap(); if (m) m.on('error', e => console.warn('chart', e && e.error)); });
-    return layer;
-  } catch(e){ return rasterChart(); }
+
+/* ship symbols, drawn once at high resolution and handed to the map as images */
+const GROUP_KEYS = ['cargo', 'tanker', 'pass', 'tug', 'fish', 'fast', 'yacht', 'other'];
+GROUPS.forEach((g, i) => g.key = GROUP_KEYS[i]);
+const groupKey = t => GROUPS.find(g => g[2](t || 0)).key;
+function makeIcon(color, moving, mine){
+  const q = 3, W = moving ? 16 : 14, H = moving ? 30 : 14, c = document.createElement('canvas');
+  c.width = (W + 8) * q; c.height = (H + 8) * q;
+  const g = c.getContext('2d'); g.scale(q, q); g.translate((W + 8) / 2, (H + 8) / 2);
+  g.shadowColor = 'rgba(15,23,42,.45)'; g.shadowBlur = 3; g.shadowOffsetY = 1.2;
+  g.beginPath();
+  if (moving){
+    const L2 = H / 2, w = W / 2 - 1.5;
+    g.moveTo(0, -L2);
+    g.bezierCurveTo(w * .6, -L2 * .72, w, -L2 * .3, w, 0);
+    g.lineTo(w, L2 * .8); g.quadraticCurveTo(w, L2, w * .65, L2);
+    g.lineTo(-w * .65, L2); g.quadraticCurveTo(-w, L2, -w, L2 * .8);
+    g.lineTo(-w, 0);
+    g.bezierCurveTo(-w, -L2 * .3, -w * .6, -L2 * .72, 0, -L2);
+  } else g.arc(0, 0, W / 2 - 1.5, 0, Math.PI * 2);
+  g.fillStyle = color; g.fill();
+  g.shadowColor = 'transparent';
+  g.lineWidth = mine ? 2.2 : 1.6; g.strokeStyle = '#ffffff'; g.stroke();
+  if (moving){ g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(0, H * .22, 1.8, 0, Math.PI * 2); g.fill(); }
+  const d = g.getImageData(0, 0, c.width, c.height);
+  return {width: c.width, height: c.height, data: new Uint8Array(d.data.buffer)};
 }
-const BASES = {
-  chart: chartLayer(),
-  light: rasterChart(),
-  hybrid: L.layerGroup([
-    L.tileLayer(esri('World_Imagery'), {maxZoom:19, maxNativeZoom:18, attribution:'© Esri'}),
-    L.tileLayer(esri('Reference/World_Transportation'), {maxZoom:19, maxNativeZoom:18, opacity:.9}),
-    L.tileLayer(esri('Reference/World_Boundaries_and_Places'), {maxZoom:19, maxNativeZoom:18})]),
-};
-const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {maxZoom:18, attribution:'© OpenSeaMap'});
-let base = null;
+function addIcons(){
+  for (const g of GROUPS){
+    if (!map.hasImage('h-' + g.key)) map.addImage('h-' + g.key, makeIcon(g[1], true), {pixelRatio: 3});
+    if (!map.hasImage('d-' + g.key)) map.addImage('d-' + g.key, makeIcon(g[1], false), {pixelRatio: 3});
+  }
+  if (!map.hasImage('city-dot')){ const c = document.createElement('canvas'); c.width = c.height = 24; const g = c.getContext('2d');
+    g.beginPath(); g.arc(12, 12, 7, 0, 7); g.fillStyle = '#fff'; g.fill(); g.beginPath(); g.arc(12, 12, 4, 0, 7); g.fillStyle = '#334155'; g.fill();
+    map.addImage('city-dot', {width: 24, height: 24, data: new Uint8Array(g.getImageData(0, 0, 24, 24).data.buffer)}, {pixelRatio: 3}); }
+  if (!map.hasImage('h-mine')) map.addImage('h-mine', makeIcon('#e11d74', true, true), {pixelRatio: 3});
+  if (!map.hasImage('d-mine')) map.addImage('d-mine', makeIcon('#e11d74', false, true), {pixelRatio: 3});
+}
+function shipsGeo(){
+  const f = [];
+  SHIPS.forEach((r, i) => {
+    const lat = get(r,'lat'); if (lat == null) return;
+    const dir = get(r,'hdg') ?? get(r,'cog'), mv = (get(r,'sog') || 0) >= .5 && dir != null, mine = fleetSet.has(r);
+    f.push({type: 'Feature', geometry: {type: 'Point', coordinates: [get(r,'lon'), lat]},
+      properties: {i, icon: (mv ? 'h-' : 'd-') + (mine ? 'mine' : groupKey(get(r,'type'))), rot: mv ? dir : 0, n: get(r,'name') || '', mine: mine ? 1 : 0, big: get(r,'len') || 0}});
+  });
+  return {type: 'FeatureCollection', features: f};
+}
+// bigger ship, bigger symbol: AIS gives length, which follows deadweight closely
+const BY_LEN = ['interpolate', ['linear'], ['get', 'big'], 0, .75, 40, .7, 100, .85, 180, 1.05, 250, 1.25, 330, 1.45, 400, 1.6];
+const SIZE = ['interpolate', ['linear'], ['zoom'], 2, ['*', .42, BY_LEN], 5, ['*', .55, BY_LEN], 8, ['*', .75, BY_LEN], 12, ['*', 1, BY_LEN], 16, ['*', 1.25, BY_LEN]];
+function addShipLayers(){
+  addIcons();
+  if (!map.getSource('ships')) map.addSource('ships', {type: 'geojson', data: shipsGeo()});
+  if (!map.getSource('sel')) map.addSource('sel', {type: 'geojson', data: {type: 'FeatureCollection', features: []}});
+  if (!map.getSource('seamarks')) map.addSource('seamarks', {type: 'raster', tileSize: 256, tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'], attribution: '© OpenSeaMap'});
+  const font = prefs.base === 'hybrid' ? ['Noto Sans Regular'] : ['Noto Sans Regular'];
+  const add = l => { if (!map.getLayer(l.id)) map.addLayer(l); };
+  add({id: 'seamarks', type: 'raster', source: 'seamarks', minzoom: 9, layout: {visibility: prefs.sea ? 'visible' : 'none'}});
+  add({id: 'sel', type: 'circle', source: 'sel', paint: {'circle-radius': 18, 'circle-color': 'rgba(225,29,116,.12)', 'circle-stroke-color': '#e11d74', 'circle-stroke-width': 2.5}});
+  add({id: 'ships', type: 'symbol', source: 'ships', filter: ['==', ['get', 'mine'], 0],
+    layout: {'icon-image': ['get', 'icon'], 'icon-size': SIZE, 'icon-rotate': ['get', 'rot'], 'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true, 'icon-ignore-placement': true, 'symbol-sort-key': ['get', 'big']}});
+  add({id: 'ship-names', type: 'symbol', source: 'ships', minzoom: 9, filter: ['all', ['==', ['get', 'mine'], 0], ['!=', ['get', 'n'], '']],
+    layout: {visibility: prefs.names ? 'visible' : 'none', 'text-field': ['get', 'n'], 'text-font': font, 'text-size': 11,
+      'text-anchor': 'top', 'text-offset': [0, 1.1], 'text-optional': true, 'text-max-width': 12, 'symbol-sort-key': ['-', 0, ['get', 'big']]},
+    paint: {'text-color': prefs.base === 'hybrid' ? '#ffffff' : '#1f2937', 'text-halo-color': prefs.base === 'hybrid' ? 'rgba(0,0,0,.8)' : '#ffffff', 'text-halo-width': 1.6}});
+  add({id: 'fleet', type: 'symbol', source: 'ships', filter: ['==', ['get', 'mine'], 1],
+    layout: {'icon-image': ['get', 'icon'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 2, .8, 10, 1.25, 16, 1.5],
+      'icon-rotate': ['get', 'rot'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+      'text-field': ['get', 'n'], 'text-font': ['Noto Sans Bold'], 'text-size': 12, 'text-anchor': 'left', 'text-offset': [1.4, 0],
+      'text-allow-overlap': true},
+    paint: {'text-color': '#ffffff', 'text-halo-color': '#e11d74', 'text-halo-width': 3}});
+}
+// Russian place names where the map data has them
+function russianLabels(){
+  if (prefs.base === 'hybrid') return;
+  for (const l of map.getStyle().layers){
+    if (l.type !== 'symbol' || !l.layout || !l.layout['text-field'] || ['ship-names', 'fleet'].includes(l.id)) continue;
+    const tf = JSON.stringify(l.layout['text-field']);
+    if (/name/.test(tf) && !/ref|housenumber/.test(tf))
+      map.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:ru'], ['get', 'name:latin'], ['get', 'name']]);
+  }
+}
+map.once('load', () => { const a = document.querySelector('.maplibregl-ctrl-attrib'); if (a) a.classList.remove('maplibregl-compact-show'); });
+map.on('style.load', () => { try { russianLabels(); } catch(e){} addShipLayers(); });
+map.on('styleimagemissing', () => addIcons());
+function draw(){
+  const s = map.getSource && map.getSource('ships'); if (s) s.setData(shipsGeo());
+  const sel = map.getSource('sel');
+  if (sel) sel.setData({type: 'FeatureCollection', features: shipOpen && get(shipOpen,'lat') != null ? [{type: 'Feature', properties: {}, geometry: {type: 'Point', coordinates: [get(shipOpen,'lon'), get(shipOpen,'lat')]}}] : []});
+  countOnScreen();
+}
+function countOnScreen(){
+  const el = $('#count');
+  if (!SHIPS.length){ el.textContent = el.dataset.msg || 'Загружаю базу судов…'; return; }
+  const b = map.getBounds(); let n = 0;
+  for (const r of SHIPS){ const lat = get(r,'lat'); if (lat != null && b.contains([get(r,'lon'), lat])) n++; }
+  el.innerHTML = `<b>${n.toLocaleString('ru')}</b> судов на экране`;
+}
+map.on('moveend', countOnScreen);
+let base = prefs.base;
 function applyPrefs(){
-  if (base) map.removeLayer(base);
-  base = (BASES[prefs.base] || BASES.chart).addTo(map);
-  prefs.sea ? seamarks.addTo(map) : map.removeLayer(seamarks);
+  if (prefs.base !== base){ base = prefs.base; map.setStyle(STYLES[prefs.base] || STYLES.hybrid); }
+  else if (map.getLayer('ship-names')){
+    map.setLayoutProperty('ship-names', 'visibility', prefs.names ? 'visible' : 'none');
+    map.setLayoutProperty('seamarks', 'visibility', prefs.sea ? 'visible' : 'none');
+  }
   document.querySelectorAll('[data-base]').forEach(b => b.setAttribute('aria-checked', b.dataset.base === prefs.base));
   $('#m-sea').setAttribute('aria-checked', prefs.sea);
   $('#m-names').setAttribute('aria-checked', prefs.names);
-  ls.set('prefs.v3', prefs); draw();
+  ls.set('prefs.v5', prefs);
 }
-
-/* Every ship is drawn on one canvas that lives inside the map pane, so it moves
-   together with the map while dragging and zooming (no lag), and is redrawn only
-   when the movement ends. Ship symbols are pre-rendered sprites. */
-const shipsPane = map.createPane('ships'); shipsPane.style.zIndex = 450; shipsPane.style.pointerEvents = 'none';
-const R = L.canvas({padding:.6, pane:'ships'}).addTo(map);
-let drawn = [], raf = 0, nOnScreen = 0;
-const sprites = new Map();
-function mix(hex, to, t){ const n = parseInt(hex.slice(1), 16), c = [n >> 16, n >> 8 & 255, n & 255]; return `rgb(${c.map(v => Math.round(v + (to - v) * t)).join(',')})`; }
-function sprite(color, moving, k, mine){
-  const key = color + moving + k + mine; if (sprites.has(key)) return sprites.get(key);
-  const q = 3, len = k * (moving ? 2.3 : 1.7), S = Math.ceil(len + 8);
-  const c = document.createElement('canvas'); c.width = c.height = S * q;
-  const g = c.getContext('2d'); g.scale(q, q); g.translate(S / 2, S / 2);
-  g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 3; g.shadowOffsetY = 1;
-  g.beginPath();
-  if (moving){
-    // hull seen from above: sharp bow, straight sides, square stern
-    const L2 = len / 2, w = k * .5;
-    g.moveTo(0, -L2);
-    g.bezierCurveTo(w * .55, -L2 * .75, w, -L2 * .35, w, -L2 * .05);
-    g.lineTo(w, L2 * .82); g.quadraticCurveTo(w, L2, w * .7, L2);
-    g.lineTo(-w * .7, L2); g.quadraticCurveTo(-w, L2, -w, L2 * .82);
-    g.lineTo(-w, -L2 * .05);
-    g.bezierCurveTo(-w, -L2 * .35, -w * .55, -L2 * .75, 0, -L2);
-    const grad = g.createLinearGradient(0, -L2, 0, L2);
-    grad.addColorStop(0, mix(color, 255, .45)); grad.addColorStop(.45, color); grad.addColorStop(1, mix(color, 0, .25));
-    g.fillStyle = grad;
-  } else {
-    const r = len / 2;
-    g.arc(0, 0, r, 0, Math.PI * 2);
-    const grad = g.createRadialGradient(-r * .35, -r * .35, r * .1, 0, 0, r);
-    grad.addColorStop(0, mix(color, 255, .5)); grad.addColorStop(1, color);
-    g.fillStyle = grad;
-  }
-  g.fill();
-  g.shadowColor = 'transparent';
-  g.lineWidth = mine ? 1.6 : 1; g.strokeStyle = mine ? '#fff' : mix(color, 0, .6); g.stroke();
-  if (moving){ // bridge mark near the stern
-    g.fillStyle = 'rgba(255,255,255,.7)'; g.fillRect(-k * .22, len * .22, k * .44, k * .14);
-  }
-  const out = {c, S}; sprites.set(key, out); return out;
-}
-function draw(){ cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const ctx = R._ctx; if (!ctx) return;
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); paint(); }); }
-function paint(){
-  const ctx = R._ctx, b = R._bounds; if (!ctx || !b) return;
-  drawn = [];
-  const z = map.getZoom(), cLng = map.getCenter().lng, size = map.getSize();
-  const v0 = map.containerPointToLayerPoint([0, 0]), v1 = map.containerPointToLayerPoint(size);
-  const k = z < 4 ? 4.5 : z < 6 ? 5.5 : z < 9 ? 6.5 : z < 12 ? 8 : 9.5;
-  let n = 0;
-  const place = r => {
-    const lat = get(r,'lat'); let lon = get(r,'lon');
-    if (lat == null) return null;
-    lon += 360 * Math.round((cLng - lon) / 360);
-    const p = map.latLngToLayerPoint([lat, lon]);
-    return b.contains(p) ? p : null;
-  };
-  const put = (p, r, color, kk, mine) => {
-    const sog = get(r,'sog') || 0, dir = get(r,'hdg') ?? get(r,'cog');
-    const moving = sog >= .5 && dir != null, sp = sprite(color, moving, kk, mine);
-    if (moving){
-      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(dir * Math.PI / 180);
-      ctx.drawImage(sp.c, -sp.S / 2, -sp.S / 2, sp.S, sp.S); ctx.restore();
-    } else ctx.drawImage(sp.c, p.x - sp.S / 2, p.y - sp.S / 2, sp.S, sp.S);
-  };
-  for (const r of SHIPS){
-    if (fleetSet.has(r)) continue;
-    const p = place(r); if (!p) continue;
-    put(p, r, colorOf(get(r,'type')), k, false); drawn.push([p.x, p.y, r]);
-    if (p.x >= v0.x && p.x <= v1.x && p.y >= v0.y && p.y <= v1.y) n++;
-  }
-  if (prefs.names && z >= 9 && n < 700){
-    ctx.font = '500 13px Barlow, sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-    const boxes = [];   // skip a name that would overlap one already written
-    for (const [x, y, r] of drawn){
-      if (x < v0.x || x > v1.x || y < v0.y || y > v1.y) continue;
-      const t = get(r,'name'); if (!t) continue;
-      const w = ctx.measureText(t).width, bx = x - w / 2, by = y + k + 2;
-      if (boxes.some(q => bx < q[0] + q[2] + 4 && q[0] < bx + w + 4 && by < q[1] + 16 && q[1] < by + 16)) continue;
-      boxes.push([bx, by, w]);
-      const sat = prefs.base === 'hybrid';
-      ctx.lineWidth = 3; ctx.strokeStyle = sat ? 'rgba(0,0,0,.75)' : 'rgba(255,255,255,.95)'; ctx.strokeText(t, bx, by + 8);
-      ctx.fillStyle = sat ? '#fff' : '#202124'; ctx.fillText(t, bx, by + 8);
-    }
-  }
-  // my ships go on top: larger, magenta, always named
-  ctx.font = '700 13px "Barlow Semi Condensed", Barlow, sans-serif'; ctx.textBaseline = 'middle';
-  for (const r of fleetSet){
-    const p = place(r); if (!p) continue;
-    put(p, r, '#ec4f9e', Math.max(k, 8) + 1, true); drawn.push([p.x, p.y, r, true]);
-    const t = get(r,'name') || ''; const w = ctx.measureText(t).width;
-    ctx.fillStyle = 'rgba(236,79,158,.95)'; ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(p.x + 14, p.y - 10, w + 12, 20, 6); else ctx.rect(p.x + 14, p.y - 10, w + 12, 20);
-    ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(t, p.x + 20, p.y + .5);
-  }
-  if (shipOpen){ const p = place(shipOpen); if (p){ ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, k * 1.6 + 6, 0, 7); ctx.stroke(); } }
-  nOnScreen = n;
-  const el = $('#count');
-  if (!SHIPS.length){ el.textContent = el.dataset.msg || 'Загружаю базу судов…'; return; }
-  el.innerHTML = `<b>${n.toLocaleString('ru')}</b> судов на экране`;
-}
-R.on('update', paint);
 map.on('click', e => {
-  let best = null, bd = 22 * 22;
-  for (const d of drawn){ const dx = d[0] - e.layerPoint.x, dy = d[1] - e.layerPoint.y, q = dx*dx + dy*dy - (d[3] ? 150 : 0); if (q < bd){ bd = q; best = d[2]; } }
   $('#menu').classList.remove('on');
-  if (best) openShip(best, false);
+  const p = e.point, box = [[p.x - 14, p.y - 14], [p.x + 14, p.y + 14]];
+  const layers = ['fleet', 'ships'].filter(l => map.getLayer(l));
+  const hit = map.queryRenderedFeatures(box, {layers});
+  if (!hit.length) return;
+  hit.sort((a, b) => b.properties.mine - a.properties.mine);
+  openShip(SHIPS[hit[0].properties.i], false);
 });
+map.on('mousemove', e => { const l = ['fleet', 'ships'].filter(x => map.getLayer(x));
+  map.getCanvas().style.cursor = l.length && map.queryRenderedFeatures(e.point, {layers: l}).length ? 'pointer' : ''; });
 
 /* ---------- where am I ---------- */
 let meMarker = null;
@@ -419,9 +397,9 @@ function locate(then){
   if (!navigator.geolocation){ toast('Этот браузер не умеет определять место'); return; }
   toast('Определяю, где ты…');
   navigator.geolocation.getCurrentPosition(p => {
-    myPos = L.latLng(p.coords.latitude, p.coords.longitude);
-    if (!meMarker) meMarker = L.marker(myPos, {icon:L.divIcon({className:'', html:'<div class="me"></div>', iconSize:[18,18], iconAnchor:[9,9]}), zIndexOffset:1000, interactive:false}).addTo(map);
-    else meMarker.setLatLng(myPos);
+    myPos = {lat: p.coords.latitude, lng: p.coords.longitude};
+    if (!meMarker){ const el = document.createElement('div'); el.className = 'me'; meMarker = new maplibregl.Marker({element: el}).setLngLat([myPos.lng, myPos.lat]).addTo(map); }
+    else meMarker.setLngLat([myPos.lng, myPos.lat]);
     if (then) then();
     flyVisible(myPos, Math.max(map.getZoom(), 10));
   }, err => toast(err.code === 1 ? 'Нет доступа к геопозиции: разреши его в настройках браузера' : 'Не получилось определить место, попробуй ещё раз'),
@@ -577,7 +555,7 @@ function openShip(r, fly){
   shipOpen = r; renderShip();
   if (get(r,'lat') != null){
     const ll = [get(r,'lat'), get(r,'lon')];
-    flyVisible(L.latLng(ll), fly ? Math.max(map.getZoom(), 10) : map.getZoom());
+    flyVisible(ll, fly ? Math.max(map.getZoom(), 10) : map.getZoom());
   }
   draw();
 }
@@ -613,7 +591,7 @@ function renderShip(){
       <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${encodeURIComponent(mmsi)}">MarineTraffic</a>
     </div>`;
   showPhoto(r);
-  if ($('#sh')) $('#sh').onclick = () => { if (!desktop()) sheet.classList.remove('full'); map.flyTo([get(r,'lat'), get(r,'lon')], 12, {duration:.8}); };
+  if ($('#sh')) $('#sh').onclick = () => { if (!desktop()) sheet.classList.remove('full'); flyVisible([get(r,'lat'), get(r,'lon')], 12); };
   if ($('#ad')) $('#ad').onclick = () => { fleet.push({imo: imo || null, mmsi, name: get(r,'name'), note:'', added:Date.now()}); saveFleet(); toast('Добавлено в мои суда'); renderShip(); };
   if ($('#rm')) $('#rm').onclick = () => { fleet.splice(idx, 1); saveFleet(); toast('Убрано из моих судов'); renderShip(); };
   if ($('#nt')) $('#nt').onchange = ev => { e.note = ev.target.value.trim(); saveFleet(); toast('Заметка сохранена'); };
@@ -694,7 +672,6 @@ function pickOwnPhoto(r){
 function photoLinks(r){
   const imo = get(r,'imo'), mmsi = get(r,'mmsi');
   return `<span class="btns" style="justify-content:center;margin:10px 0 0">
-    <button class="btn main" id="own-ph">Добавить своё фото</button>
     ${imo ? `<a class="btn" target="_blank" rel="noopener" href="https://www.vesselfinder.com/vessels/details/${encodeURIComponent(imo)}">Фото на VesselFinder</a>
     <a class="btn" target="_blank" rel="noopener" href="https://www.shipspotting.com/photos/gallery?imo=${encodeURIComponent(imo)}">ShipSpotting</a>` : ''}
     <a class="btn" target="_blank" rel="noopener" href="https://www.marinetraffic.com/en/ais/details/ships/${imo ? 'imo:' + encodeURIComponent(imo) : 'mmsi:' + encodeURIComponent(mmsi)}">MarineTraffic</a></span>`;
@@ -717,14 +694,13 @@ async function showPhoto(r){
   if (!ph){
     box.style.aspectRatio = 'auto'; box.style.padding = '14px';
     box.innerHTML = `<div>${imo ? 'Свободного фото этого судна в открытых архивах пока нет' : 'У судна нет номера IMO'}<br>${photoLinks(r)}</div>`;
-    $('#own-ph').onclick = () => pickOwnPhoto(r);
     return;
   }
   const img = new Image(); img.alt = 'Фото судна ' + (get(r,'name') || '');
   img.onload = () => { box.textContent = ''; box.appendChild(img); };
   img.onerror = () => { box.textContent = 'Фото не загрузилось'; };
   img.src = ph.src;
-  if (/^https:\/\//.test(ph.page)) cap.innerHTML = `Фото: ${esc(ph.author || 'автор не указан')}${ph.lic ? ', ' + esc(ph.lic) : ''}, <a href="${esc(ph.page)}" target="_blank" rel="noopener">${esc(ph.where || 'Wikimedia Commons')}</a>. <a href="#" id="ph-own">Поставить своё</a>`;
+  if (/^https:\/\//.test(ph.page)) cap.innerHTML = `Фото: ${esc(ph.author || 'автор не указан')}${ph.lic ? ', ' + esc(ph.lic) : ''}, <a href="${esc(ph.page)}" target="_blank" rel="noopener">${esc(ph.where || 'Wikimedia Commons')}</a>`;
   const o = $('#ph-own'); if (o) o.onclick = e => { e.preventDefault(); pickOwnPhoto(r); };
 }
 
@@ -733,7 +709,8 @@ function fitFleet(){
   const pts = [...fleetSet].filter(r => get(r,'lat') != null).map(r => [get(r,'lat'), get(r,'lon')]);
   if (!pts.length){ toast(fleet.length ? 'У моих судов пока нет позиций' : 'Добавь свои суда через поиск'); return; }
   if (!desktop()) setTab('map');
-  if (pts.length === 1) map.flyTo(pts[0], 9); else map.flyToBounds(pts, {padding:[60, 60], maxZoom:9});
+  if (pts.length === 1) map.flyTo({center: [pts[0][1], pts[0][0]], zoom: 9});
+  else map.fitBounds(pts.reduce((b, p) => b.extend([p[1], p[0]]), new maplibregl.LngLatBounds([pts[0][1], pts[0][0]], [pts[0][1], pts[0][0]])), {padding: 60, maxZoom: 9});
 }
 
 /* ---------- controls ---------- */
@@ -746,7 +723,6 @@ document.querySelectorAll('[data-base]').forEach(b => b.onclick = () => { prefs.
 $('#m-sea').onclick = () => { prefs.sea = !prefs.sea; applyPrefs(); };
 $('#m-names').onclick = () => { prefs.names = !prefs.names; applyPrefs(); };
 map.on('movestart', () => $('#menu').classList.remove('on'));
-addEventListener('resize', () => { map.invalidateSize(); draw(); });
 
 /* ---------- data ---------- */
 $('#legend').innerHTML = GROUPS.map(g => `<span><i style="background:${g[1]}"></i>${esc(g[0])}</span>`).join('') + `<span><i style="background:#ec4f9e"></i>Мои суда</span>`;
@@ -759,7 +735,7 @@ fetch('data/ships.json', {cache:'no-cache'}).then(r => { if (!r.ok) throw new Er
   fleet.forEach(e => { const r = findShip(e); if (r){ e.name = get(r,'name'); if (!e.mmsi) e.mmsi = get(r,'mmsi'); } });
   ls.set('fleet.v1', fleet); refreshFleetSet();
   const pts = [...fleetSet].filter(r => get(r,'lat') != null).map(r => [get(r,'lat'), get(r,'lon')]);
-  if (pts.length) map.fitBounds(pts, {padding:[60, 60], maxZoom:7});
+  if (pts.length) map.fitBounds(pts.reduce((b, p) => b.extend([p[1], p[0]]), new maplibregl.LngLatBounds([pts[0][1], pts[0][0]], [pts[0][1], pts[0][0]])), {padding: 60, maxZoom: 7, duration: 0});
   if (sheet.classList.contains('on')) setTab(tab === 'map' ? 'fleet' : tab);
   draw();
 }).catch(() => { $('#count').dataset.msg = 'База ещё не собрана: подожди первого обновления'; draw(); });
