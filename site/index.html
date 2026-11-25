@@ -636,24 +636,40 @@ async function viaWikidata(imo){
   const f = e.claims && e.claims.P18 && e.claims.P18[0] && e.claims.P18[0].mainsnak.datavalue && e.claims.P18[0].mainsnak.datavalue.value;
   return f ? await commons('titles=' + encodeURIComponent('File:' + f)) : null;
 }
+// Openverse: search engine of Creative-Commons photos (Flickr, Commons and others), free, no key
+async function openverse(q, imo, name){
+  const j = await (await fetch('https://api.openverse.org/v1/images/?page_size=20&mature=false&q=' + encodeURIComponent(q))).json();
+  const norm = t => String(t || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  const hit = (j.results || []).find(x => { const t = norm(x.title) + ' ' + norm((x.tags || []).map(g => g.name).join(' '));
+    return t.includes(String(imo)) || (name && name.length >= 4 && norm(x.title).includes(norm(name))); });
+  if (!hit) return null;
+  return {imageinfo: [{thumburl: hit.thumbnail || hit.url, url: hit.url, descriptionurl: hit.foreign_landing_url,
+    extmetadata: {Artist: {value: hit.creator || ''}, LicenseShortName: {value: ('CC ' + (hit.license || '').toUpperCase() + ' ' + (hit.license_version || '')).trim()}}}],
+    source: hit.source};
+}
 async function findPhoto(imo, name){
   if (photoCache.has(imo)) return photoCache.get(imo);
+  const stored = ls.get('pc.' + imo, null);   // remember answers between visits (a miss for a week)
+  if (stored && (stored.p || Date.now() - stored.t < 7 * 864e5)){ photoCache.set(imo, stored.p); return stored.p; }
   let p = null;
   const tries = [
     () => viaWikidata(imo),
     () => commons('generator=categorymembers&gcmtype=file&gcmlimit=10&gcmtitle=' + encodeURIComponent('Category:IMO ' + imo)),
     () => commons('generator=search&gsrnamespace=6&gsrlimit=5&gsrsearch=' + encodeURIComponent('"IMO ' + imo + '"')),
+    () => openverse('IMO ' + imo, imo, null),
     // last resort: files whose title holds the ship's name, e.g. "Ever Ally (ship, 2023).jpg"
     async () => { if (!name || name.length < 4) return null;
       const hit = await commons('generator=search&gsrnamespace=6&gsrlimit=10&gsrsearch=' + encodeURIComponent('intitle:"' + name + '" ship'));
       const norm = t => t.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
       return hit && norm(hit.title).includes(norm(name)) ? hit : null; },
+    () => name && name.length >= 4 ? openverse('"' + name + '" ship', imo, name) : null,
   ];
   for (const t of tries){ try { p = await t(); } catch(e){ p = null; } if (p) break; }
   const ii = p && p.imageinfo[0], md = (ii && ii.extmetadata) || {};
   const out = ii ? {src: ii.thumburl || ii.url, page: ii.descriptionurl,
-    author: plain(md.Artist && md.Artist.value).slice(0, 80), lic: plain(md.LicenseShortName && md.LicenseShortName.value)} : null;
-  photoCache.set(imo, out); return out;
+    author: plain(md.Artist && md.Artist.value).slice(0, 80), lic: plain(md.LicenseShortName && md.LicenseShortName.value),
+    where: p.source ? 'Openverse (' + p.source + ')' : 'Wikimedia Commons'} : null;
+  photoCache.set(imo, out); ls.set('pc.' + imo, {p: out, t: Date.now()}); return out;
 }
 /* the user's own photos, kept in this browser (resized to keep storage small) */
 const myPhotoKey = r => 'photo.' + (get(r,'imo') || 'm' + get(r,'mmsi'));
@@ -707,7 +723,7 @@ async function showPhoto(r){
   img.onload = () => { box.textContent = ''; box.appendChild(img); };
   img.onerror = () => { box.textContent = 'Фото не загрузилось'; };
   img.src = ph.src;
-  if (/^https:\/\//.test(ph.page)) cap.innerHTML = `Фото: ${esc(ph.author || 'автор не указан')}${ph.lic ? ', ' + esc(ph.lic) : ''}, <a href="${esc(ph.page)}" target="_blank" rel="noopener">Wikimedia Commons</a>. <a href="#" id="ph-own">Поставить своё</a>`;
+  if (/^https:\/\//.test(ph.page)) cap.innerHTML = `Фото: ${esc(ph.author || 'автор не указан')}${ph.lic ? ', ' + esc(ph.lic) : ''}, <a href="${esc(ph.page)}" target="_blank" rel="noopener">${esc(ph.where || 'Wikimedia Commons')}</a>. <a href="#" id="ph-own">Поставить своё</a>`;
   const o = $('#ph-own'); if (o) o.onclick = e => { e.preventDefault(); pickOwnPhoto(r); };
 }
 
