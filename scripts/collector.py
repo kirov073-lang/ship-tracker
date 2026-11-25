@@ -156,9 +156,8 @@ async def listen(ships, pending, stats):
         "FilterMessageTypes": ["PositionReport", "ShipStaticData"],
     }
     deadline = time.monotonic() + LISTEN
-    attempts = 0
-    while time.monotonic() < deadline and attempts < 4:
-        attempts += 1
+    while time.monotonic() < deadline - 10:
+        stats["connects"] = stats.get("connects", 0) + 1
         try:
             async with websockets.connect(AIS_URL, max_size=2**22, open_timeout=20,
                                           ping_interval=20) as ws:
@@ -172,7 +171,10 @@ async def listen(ships, pending, stats):
                     if "error" in m:
                         print("stream error:", m["error"])
                         stats["errors"] += 1
-                        return
+                        stats["last_error"] = str(m["error"])[:200]
+                        if "key" in str(m["error"]).lower():
+                            return  # wrong key: retrying will not help
+                        break
                     kind = m.get("MessageType")
                     body = (m.get("Message") or {}).get(kind) or {}
                     meta = m.get("MetaData") or {}
@@ -192,8 +194,9 @@ async def listen(ships, pending, stats):
             print("stream quiet, reconnecting")
         except Exception as e:
             stats["errors"] += 1
+            stats["last_error"] = repr(e)[:200]
             print(f"connection problem: {e!r}")
-            await asyncio.sleep(5)
+        await asyncio.sleep(10)
 
 
 def merge_positions(ships, pending):
