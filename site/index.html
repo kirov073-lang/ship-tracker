@@ -25,22 +25,23 @@ LAYOUT  phone: chart + bottom tabs + sheet; desktop: side panel + chart
 html,body{height:100%;margin:0;overflow:hidden;background:var(--chrome);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overscroll-behavior:none}
 button,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--mag);outline-offset:2px}
-#map{position:fixed;inset:0 0 calc(var(--tab) + env(safe-area-inset-bottom)) 0;background:#0b1e33}
+#map{position:fixed;top:calc(56px + env(safe-area-inset-top));left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom));background:#0b2a55}
+.hdr{position:fixed;z-index:1250;left:0;right:0;top:0;height:calc(56px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);background:#243040;display:grid;grid-template-columns:56px 1fr 56px;align-items:center;border-bottom:1px solid #1b2633}
+.hdr h1{margin:0;text-align:center;font:600 22px/1 Barlow,sans-serif;color:#fff}
+.hdr button{width:56px;height:56px;border:0;background:none;display:grid;place-items:center;cursor:pointer}
+.hdr svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
 #ships{position:absolute;inset:0;pointer-events:none;z-index:450}
 .leaflet-container{font:14px Barlow,sans-serif}
 .leaflet-control-attribution{font-size:11px;background:rgba(13,27,42,.7)!important;color:#9fb2c4}
 .leaflet-control-attribution a{color:#9fc6ee}
-.leaflet-top.leaflet-right{top:calc(66px + env(safe-area-inset-top))}
+.leaflet-top.leaflet-right{top:0}
 .leaflet-bar{border:1px solid var(--line)!important;box-shadow:none!important}
 .leaflet-bar a{background:rgba(13,27,42,.92)!important;color:var(--ink)!important;border-bottom-color:var(--line)!important;width:40px!important;height:40px!important;line-height:40px!important}
 
-.topbar{position:fixed;z-index:1000;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));display:flex;gap:8px}
-.sbox{flex:1;display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border-radius:12px;background:rgba(13,27,42,.92);border:1px solid var(--line);color:var(--soft);cursor:text;backdrop-filter:blur(8px);font-size:16px;text-align:left}
-.sbox svg{width:20px;height:20px;stroke:var(--soft);flex:none}
 .fabs{position:fixed;z-index:1000;right:12px;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 34px);display:flex;flex-direction:column;gap:10px}
-.fab{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:rgba(13,27,42,.92);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(8px)}
-.fab svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.count{position:fixed;z-index:1000;left:12px;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 34px);background:rgba(13,27,42,.9);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px;color:var(--soft);max-width:calc(100% - 100px)}
+.fab{width:64px;height:64px;border-radius:50%;border:2px solid #3a6ea8;background:rgba(36,48,64,.92);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(8px)}
+.fab svg{width:30px;height:30px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.count{position:fixed;z-index:1000;left:12px;font-size:12px!important;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 34px);background:rgba(13,27,42,.9);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px;color:var(--soft);max-width:calc(100% - 100px)}
 .count b{color:var(--ink);font-weight:600}
 .legend{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:6px 12px 8px;font-size:13px;color:var(--soft)}
 .legend span{white-space:nowrap}.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
@@ -51,16 +52,15 @@ button,input,textarea{font:inherit;color:inherit}
 .menu button[aria-checked=true]::after{content:"✓";color:var(--mag);font-weight:700}
 .menu hr{border:0;border-top:1px solid var(--line);margin:4px 6px}
 
-.tabs{position:fixed;z-index:1200;left:0;right:0;bottom:0;height:calc(var(--tab) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--chrome);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr)}
-.tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--soft);cursor:pointer;position:relative}
+.tabs{position:fixed;z-index:1200;left:0;right:0;bottom:0;height:calc(var(--tab) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:#132233;border-top:1px solid #1b2633;display:grid;grid-template-columns:repeat(4,1fr)}
+.tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:13px;color:#7f93a6;cursor:pointer;position:relative}
 .tab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.tab[aria-selected=true]{color:var(--ink)}
-.tab[aria-selected=true] svg{stroke:var(--mag)}
+.tab[aria-selected=true]{color:#fff}
 .badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--mag);color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:0 6px;line-height:18px}
 
 .sheet{position:fixed;z-index:1150;left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom));height:62dvh;background:var(--chrome);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.45);display:flex;flex-direction:column;transform:translateY(110%);transition:transform .28s ease,height .28s ease}
 .sheet.on{transform:none}
-.sheet.full{height:calc(100dvh - var(--tab) - env(safe-area-inset-bottom) - env(safe-area-inset-top) - 8px)}
+.sheet.full{height:calc(100dvh - var(--tab) - env(safe-area-inset-bottom) - env(safe-area-inset-top) - 64px)}
 .grab{flex:none;height:30px;display:grid;place-items:center;cursor:grab;touch-action:none;border:0;background:none;width:100%}
 .grab::before{content:"";width:44px;height:5px;border-radius:3px;background:#3a536d}
 .shead{flex:none;display:flex;align-items:center;gap:8px;padding:0 16px 10px}
@@ -108,11 +108,11 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
 
 @media(min-width:900px){
  :root{--tab:0px}
- .tabs{right:auto;top:0;bottom:auto;width:420px;height:64px;padding:0;border-top:0;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
- .sheet,.sheet.full{right:auto;top:64px;bottom:0;width:420px;height:auto;border-radius:0;transform:none;border-top:0;border-right:1px solid var(--line);box-shadow:none}
+ .tabs{right:auto;top:0;bottom:auto;width:420px;height:calc(56px + env(safe-area-inset-top));padding:0;border-top:0;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+ .sheet,.sheet.full{right:auto;top:56px;bottom:0;width:420px;height:auto;border-radius:0;transform:none;border-top:0;border-right:1px solid var(--line);box-shadow:none}
  .grab,.x{display:none}.shead{padding-top:14px}
  #map{left:420px;bottom:0}
- .topbar{left:436px;right:auto;width:380px}
+ .hdr{left:420px}
  .count{left:436px;bottom:24px}.fabs{bottom:24px}.menu{bottom:24px}
  .leaflet-top.leaflet-right{top:10px}
 }
@@ -122,19 +122,21 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
 <body>
 <div id="map" aria-label="Карта судов"></div>
 
-<div class="topbar"><button class="sbox" id="sbox"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg>Название судна, IMO или MMSI</button></div>
+<header class="hdr"><button id="hmenu" aria-label="Вид карты"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><h1 id="htitle">Карта</h1><button id="sbox" aria-label="Поиск судна"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg></button></header>
 
 <div class="count" id="count">Загружаю базу судов…</div>
 
 <div class="fabs">
   <button class="fab" id="f-loc" title="Где я" aria-label="Показать моё место и суда рядом"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></button>
   <button class="fab" id="f-fleet" title="Мои суда на карте" aria-label="Показать мои суда на карте"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M8 10h8M5 14a7 7 0 0 0 14 0"/></svg></button>
+  <button class="fab" id="f-list" title="Суда рядом списком" aria-label="Суда рядом списком"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg></button>
   <button class="fab" id="f-layers" title="Вид карты" aria-label="Вид карты" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg></button>
 </div>
 <div class="menu" id="menu" role="menu">
+  <button role="menuitemradio" data-base="hybrid">Спутник с подписями</button>
   <button role="menuitemradio" data-base="dark">Тёмная</button>
   <button role="menuitemradio" data-base="light">Схема</button>
-  <button role="menuitemradio" data-base="sat">Спутник</button>
+  <button role="menuitemradio" data-base="sat">Спутник без подписей</button>
   <hr>
   <button role="menuitemcheckbox" id="m-sea">Морские знаки</button>
   <button role="menuitemcheckbox" id="m-names">Названия судов</button>
@@ -149,10 +151,10 @@ summary{cursor:pointer;font-weight:600;min-height:32px}
 </section>
 
 <nav class="tabs" role="tablist">
-  <button class="tab" role="tab" data-tab="map" aria-selected="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>Карта</button>
-  <button class="tab" role="tab" data-tab="fleet" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 17l2 3h14l2-3H3zM5 17v-5h14v5M8 12V8h8v4M11 8V5h2v3"/></svg>Мои суда<span class="badge" id="badge" hidden></span></button>
-  <button class="tab" role="tab" data-tab="near" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>Рядом</button>
+  <button class="tab" role="tab" data-tab="fleet" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 17l2 3h14l2-3H3zM5 17v-5h14v5M8 12V8h8v4M11 8V5h2v3"/></svg>Мой флот<span class="badge" id="badge" hidden></span></button>
   <button class="tab" role="tab" data-tab="search" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.5-4.5"/></svg>Поиск</button>
+  <button class="tab" role="tab" data-tab="map" aria-selected="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>Карта</button>
+  <button class="tab" role="tab" data-tab="near" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>Рядом</button>
 </nav>
 <div class="toast" id="toast" role="status"></div>
 
@@ -174,14 +176,14 @@ const iso = mmsi => MID[String(mmsi).slice(0,3)] || '';
 const flagOf = mmsi => { const c = iso(mmsi); return c ? String.fromCodePoint(...[...c].map(ch => 127397 + ch.charCodeAt(0))) : '🏳'; };
 // colour groups follow the convention seafarers know from AIS plotters
 const GROUPS = [
-  ['Грузовые', '#3fbf5a', t => t >= 70 && t <= 79],
-  ['Танкеры', '#e5484d', t => t >= 80 && t <= 89],
-  ['Пассажирские', '#4f7dff', t => t >= 60 && t <= 69],
-  ['Служебные', '#2ec4d6', t => [31,32,33,34,50,51,52,53,54,55,58,59].includes(t)],
-  ['Рыболовные', '#f08a24', t => t === 30],
-  ['Скоростные', '#f2d23c', t => t >= 40 && t <= 49],
-  ['Яхты', '#a66bf0', t => t === 36 || t === 37],
-  ['Прочие', '#9aa7b4', () => true],
+  ['Грузовые', '#39e639', t => t >= 70 && t <= 79],
+  ['Танкеры', '#ff3b3b', t => t >= 80 && t <= 89],
+  ['Пассажирские', '#3b82ff', t => t >= 60 && t <= 69],
+  ['Служебные', '#5ad1ff', t => [31,32,33,34,50,51,52,53,54,55,58,59].includes(t)],
+  ['Рыболовные', '#ff9a1f', t => t === 30],
+  ['Скоростные', '#ffe21f', t => t >= 40 && t <= 49],
+  ['Яхты', '#ff4dff', t => t === 36 || t === 37],
+  ['Прочие', '#c9d1d9', () => true],
 ];
 const colorOf = t => GROUPS.find(g => g[2](t || 0))[1];
 const typeName = t => {
@@ -207,7 +209,7 @@ const fmtNm = d => d < 10 ? d.toFixed(1).replace('.', ',') + ' мили' : Math.
 /* ---------- state ---------- */
 let F = {}, SHIPS = [], byMmsi = new Map(), byImo = new Map(), updated = 0;
 let fleet = ls.get('fleet.v1', []);
-let prefs = Object.assign({base:'dark', sea:false, names:true}, ls.get('prefs.v1', {}));
+let prefs = Object.assign({base:'hybrid', sea:false, names:true}, ls.get('prefs.v2', {}));
 let myPos = null, tab = 'map', shipOpen = null, query = '';
 const get = (r, k) => r ? r[F[k]] : undefined;
 const findShip = e => (e.imo && byImo.get(+e.imo)) || (e.mmsi && byMmsi.get(+e.mmsi)) || null;
@@ -226,7 +228,12 @@ function flyVisible(ll, z){
   const pt = map.project(ll, z).add([0, cover / 2]);
   map.flyTo(map.unproject(pt, z), z, {duration:.8});
 }
+const esri = p => `https://server.arcgisonline.com/ArcGIS/rest/services/${p}/MapServer/tile/{z}/{y}/{x}`;
 const BASES = {
+  hybrid: L.layerGroup([
+    L.tileLayer(esri('World_Imagery'), {maxZoom:19, maxNativeZoom:18, attribution:'© Esri, Maxar, Earthstar Geographics'}),
+    L.tileLayer(esri('Reference/World_Transportation'), {maxZoom:19, maxNativeZoom:18, opacity:.9}),
+    L.tileLayer(esri('Reference/World_Boundaries_and_Places'), {maxZoom:19, maxNativeZoom:18})]),
   dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'}),
   light: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19, attribution:'© OpenStreetMap, © CARTO'}),
   sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:18, attribution:'© Esri, Maxar, Earthstar Geographics'}),
@@ -240,7 +247,7 @@ function applyPrefs(){
   document.querySelectorAll('[data-base]').forEach(b => b.setAttribute('aria-checked', b.dataset.base === prefs.base));
   $('#m-sea').setAttribute('aria-checked', prefs.sea);
   $('#m-names').setAttribute('aria-checked', prefs.names);
-  ls.set('prefs.v1', prefs); draw();
+  ls.set('prefs.v2', prefs); draw();
 }
 
 /* every ship is drawn on one canvas, so tens of thousands stay fast */
@@ -255,7 +262,7 @@ function paint(){
   drawn = [];
   if (zooming) return;
   const z = map.getZoom(), c = map.getCenter(), b = map.getBounds().pad(.05);
-  const s = z < 5 ? 2.2 : z < 7 ? 3.4 : z < 10 ? 5 : 7;
+  const s = z < 4 ? 4 : z < 7 ? 5.5 : z < 10 ? 6.5 : 8;
   let n = 0;
   const place = r => {
     const lat = get(r,'lat'); let lon = get(r,'lon');
@@ -268,23 +275,27 @@ function paint(){
     const sog = get(r,'sog') || 0, dir = get(r,'hdg') ?? get(r,'cog');
     ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = sz > 4 ? 1.2 : .6;
     ctx.beginPath();
-    if (sog >= .5 && dir != null && sz >= 3.4){
+    if (sog >= .5 && dir != null){
       const a = dir * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
       const pt = (x, y) => [p.x + x*cs - y*sn, p.y + x*sn + y*cs];
-      ctx.moveTo(...pt(0, -sz*1.6)); ctx.lineTo(...pt(sz, sz*1.1)); ctx.lineTo(...pt(0, sz*.5)); ctx.lineTo(...pt(-sz, sz*1.1));
+      ctx.moveTo(...pt(0, -sz*1.5)); ctx.lineTo(...pt(sz, sz*1.1)); ctx.lineTo(...pt(-sz, sz*1.1));
       ctx.closePath();
-    } else ctx.arc(p.x, p.y, sz * .8, 0, 7);
-    ctx.fill(); if (sz > 3) ctx.stroke();
+    } else ctx.arc(p.x, p.y, sz * .75, 0, 7);
+    ctx.fill(); ctx.stroke();
   };
   for (const r of SHIPS){
     if (fleetSet.has(r)) continue;
     const p = place(r); if (!p) continue;
-    n++; shape(p, r, colorOf(get(r,'type')), s, 'rgba(0,0,0,.55)'); drawn.push([p.x, p.y, r]);
+    n++; shape(p, r, colorOf(get(r,'type')), s, 'rgba(20,20,20,.8)'); drawn.push([p.x, p.y, r]);
   }
-  if (prefs.names && z >= 11 && n < 450){
-    ctx.font = '600 12px Barlow, sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  if (prefs.names && z >= 9 && n < 700){
+    ctx.font = '500 13px Barlow, sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    const boxes = [];   // skip a name that would overlap one already written
     for (const [x, y, r] of drawn){ const t = get(r,'name'); if (!t) continue;
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,18,30,.85)'; ctx.strokeText(t, x + 10, y); ctx.fillStyle = '#e6edf4'; ctx.fillText(t, x + 10, y); }
+      const w = ctx.measureText(t).width, bx = x - w/2, by = y + 9;
+      if (boxes.some(q => bx < q[0] + q[2] + 4 && q[0] < bx + w + 4 && by < q[1] + 16 && q[1] < by + 16)) continue;
+      boxes.push([bx, by, w]);
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(t, bx, y + 16); ctx.fillStyle = '#fff'; ctx.fillText(t, bx, y + 16); }
   }
   // my ships go on top: larger, magenta, always named
   ctx.font = '700 13px "Barlow Semi Condensed", Barlow, sans-serif'; ctx.textBaseline = 'middle';
@@ -329,11 +340,14 @@ function locate(then){
 /* ---------- sheet & tabs ---------- */
 const sheet = $('#sheet');
 function openSheet(title){ $('#stitle').textContent = title; sheet.classList.add('on'); }
+const TITLES = {map:'Карта', fleet:'Мой флот', search:'Поиск', near:'Рядом'};
 function setTab(t){
-  tab = t; shipOpen = null;
+  tab = t; shipOpen = null; $('#htitle').textContent = TITLES[t];
   if (t === 'map' && desktop()) t = 'fleet';
   document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === (desktop() ? t : tab)));
   if (t === 'map'){ sheet.classList.remove('on', 'full'); draw(); return; }
+  // like Ship Info: fleet and search are whole pages, «Рядом» and ship cards leave the map visible
+  sheet.classList.toggle('full', t === 'fleet' || t === 'search');
   if (t === 'fleet') renderFleet();
   if (t === 'search') renderSearch();
   if (t === 'near'){ renderNear(); if (!myPos) locate(renderNear); }
@@ -374,7 +388,7 @@ function bindRows(el, rows){
 const statusLine = () => SHIPS.length ? `<p class="status">В базе ${SHIPS.length.toLocaleString('ru')} судов. Обновлено ${esc(ago(updated))}, обновляется каждые 30 минут.</p>` : '';
 
 function renderFleet(){
-  openSheet('Мои суда');
+  openSheet('Мой флот');
   const body = $('#sbody');
   if (!fleet.length){
     body.innerHTML = `<div class="empty"><strong>Здесь будут суда, на которых ты работал</strong>
@@ -522,6 +536,8 @@ function fitFleet(){
 /* ---------- controls ---------- */
 $('#f-loc').onclick = () => locate(() => { if (tab === 'near' || desktop()) setTab('near'); });
 $('#f-fleet').onclick = fitFleet;
+$('#f-list').onclick = () => setTab('near');
+$('#hmenu').onclick = () => $('#f-layers').click();
 $('#f-layers').onclick = e => { const m = $('#menu'), on = !m.classList.contains('on'); m.classList.toggle('on', on); e.currentTarget.setAttribute('aria-expanded', on); };
 document.querySelectorAll('[data-base]').forEach(b => b.onclick = () => { prefs.base = b.dataset.base; applyPrefs(); });
 $('#m-sea').onclick = () => { prefs.sea = !prefs.sea; applyPrefs(); };
