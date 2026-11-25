@@ -26,7 +26,7 @@ LAYOUT  phone: chart + bottom tabs + sheet; desktop: side panel + chart
 html,body{height:100%;margin:0;overflow:hidden;background:var(--chrome);color:var(--ink);font:16px/1.5 Barlow,system-ui,sans-serif;overscroll-behavior:none}
 button,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--mag);outline-offset:2px}
-#map{position:fixed;top:calc(56px + env(safe-area-inset-top));left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom));background:#1c4b91}
+#map{position:fixed;top:calc(56px + env(safe-area-inset-top));left:0;right:0;bottom:calc(var(--tab) + env(safe-area-inset-bottom));background:#aadaff}
 .hdr{position:fixed;z-index:1250;left:0;right:0;top:0;height:calc(56px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);background:#243040;display:grid;grid-template-columns:56px 1fr 56px;align-items:center;border-bottom:1px solid #1b2633}
 .hdr h1{margin:0;text-align:center;font:600 22px/1 Barlow,sans-serif;color:#fff}
 .hdr button{width:56px;height:56px;border:0;background:none;display:grid;place-items:center;cursor:pointer}
@@ -235,37 +235,41 @@ function flyVisible(ll, z){
   map.flyTo(map.unproject(pt, z), z, {duration:.8});
 }
 const esri = p => `https://server.arcgisonline.com/ArcGIS/rest/services/${p}/MapServer/tile/{z}/{y}/{x}`;
-/* Electronic chart: vector OpenStreetMap data (OpenFreeMap, free, no key) drawn in our own
-   colours, close to the Ship Info map: blue sea, green land, roads, ports, Russian names. */
+/* Electronic chart: vector OpenStreetMap data (OpenFreeMap, free, no key) drawn in
+   Google-Maps-like colours, with Russian names where they exist. */
 const NAME = ['coalesce', ['get', 'name:ru'], ['get', 'name_int'], ['get', 'name']];
 const lw = (pairs) => ['interpolate', ['exponential', 1.5], ['zoom'], ...pairs];
-const CHART = {
+const CHART = {   // palette of Google Maps (light): pale land, light-blue water, white roads, yellow highways
   version: 8,
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
   sources: {omt: {type: 'vector', url: 'https://tiles.openfreemap.org/planet'}},
   layers: [
-    {id: 'land', type: 'background', paint: {'background-color': '#2d5a45'}},
-    {id: 'wood', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['wood', 'forest']]], paint: {'fill-color': '#2a5d42', 'fill-opacity': .7}},
-    {id: 'grass', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['grass', 'farmland', 'wetland']]], paint: {'fill-color': '#33664b', 'fill-opacity': .5}},
-    {id: 'sand-ice', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['sand', 'ice', 'rock']]], paint: {'fill-color': ['match', ['get', 'class'], 'ice', '#c9d8e3', '#6f7d5e'], 'fill-opacity': .7}},
-    {id: 'urban', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['residential', 'suburb', 'neighbourhood', 'commercial', 'retail']]], paint: {'fill-color': '#3b5a58', 'fill-opacity': .55}},
-    {id: 'industry', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['industrial', 'railway', 'quarry']]], paint: {'fill-color': '#455866', 'fill-opacity': .6}},
-    {id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: {'fill-color': '#1c4b91'}},
-    {id: 'river', type: 'line', source: 'omt', 'source-layer': 'waterway', minzoom: 8, paint: {'line-color': '#1c4b91', 'line-width': lw([8, .5, 14, 4])}},
-    {id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: {'fill-color': '#4a6c62', 'fill-opacity': .8}},
-    {id: 'runway', type: 'line', source: 'omt', 'source-layer': 'aeroway', minzoom: 10, filter: ['==', ['get', 'class'], 'runway'], paint: {'line-color': '#5f6f7e', 'line-width': lw([10, 1, 15, 12])}},
-    {id: 'ferry', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['==', ['get', 'class'], 'ferry'], paint: {'line-color': '#6fa8dc', 'line-width': 1, 'line-dasharray': [3, 3], 'line-opacity': .7}},
-    {id: 'rail', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 9, filter: ['==', ['get', 'class'], 'rail'], paint: {'line-color': '#5d6a78', 'line-width': 1}},
-    {id: 'road-minor', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 12, filter: ['in', ['get', 'class'], ['literal', ['minor', 'service']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#4f6a7e', 'line-width': lw([12, .5, 17, 6])}},
-    {id: 'road-mid', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 8, filter: ['in', ['get', 'class'], ['literal', ['secondary', 'tertiary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#5f7891', 'line-width': lw([8, .4, 17, 9])}},
-    {id: 'road-main', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 5, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#7d90ab', 'line-width': lw([5, .4, 17, 12])}},
-    {id: 'border', type: 'line', source: 'omt', 'source-layer': 'boundary', filter: ['all', ['<=', ['to-number', ['get', 'admin_level'], 99], 2], ['!=', ['get', 'maritime'], 1]], paint: {'line-color': '#b4c2d2', 'line-width': 1, 'line-dasharray': [3, 2], 'line-opacity': .8}},
-    {id: 'water-name', type: 'symbol', source: 'omt', 'source-layer': 'water_name', layout: {'text-field': NAME, 'text-font': ['Noto Sans Italic'], 'text-size': ['match', ['get', 'class'], 'ocean', 16, 'sea', 14, 12], 'text-letter-spacing': .1, 'text-max-width': 8}, paint: {'text-color': '#8fb6ea', 'text-halo-color': '#123566', 'text-halo-width': 1}},
-    {id: 'road-name', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 12, layout: {'symbol-placement': 'line', 'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 11}, paint: {'text-color': '#c8d3df', 'text-halo-color': '#22374a', 'text-halo-width': 1}},
-    {id: 'village', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 10, filter: ['in', ['get', 'class'], ['literal', ['village', 'hamlet', 'suburb']]], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-max-width': 8}, paint: {'text-color': '#e3eaf2', 'text-halo-color': '#13263a', 'text-halo-width': 1.4}},
-    {id: 'town', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 7, filter: ['==', ['get', 'class'], 'town'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([7, 11, 14, 17]), 'text-max-width': 8}, paint: {'text-color': '#ffffff', 'text-halo-color': '#13263a', 'text-halo-width': 1.5}},
-    {id: 'city', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 4, filter: ['==', ['get', 'class'], 'city'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([4, 11, 12, 22]), 'text-max-width': 8}, paint: {'text-color': '#ffffff', 'text-halo-color': '#13263a', 'text-halo-width': 1.6}},
-    {id: 'country', type: 'symbol', source: 'omt', 'source-layer': 'place', maxzoom: 7, filter: ['==', ['get', 'class'], 'country'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([2, 11, 6, 16]), 'text-transform': 'uppercase', 'text-letter-spacing': .15, 'text-max-width': 7}, paint: {'text-color': '#dfe7f0', 'text-halo-color': '#13263a', 'text-halo-width': 1.4}},
+    {id: 'land', type: 'background', paint: {'background-color': '#f5f3ef'}},
+    {id: 'wood', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['wood', 'forest']]], paint: {'fill-color': '#cfe8c4', 'fill-opacity': .8}},
+    {id: 'grass', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['grass', 'wetland']]], paint: {'fill-color': '#dcefd2', 'fill-opacity': .7}},
+    {id: 'sand-ice', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['sand', 'ice', 'rock']]], paint: {'fill-color': ['match', ['get', 'class'], 'ice', '#ffffff', '#f2ead6']}},
+    {id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: {'fill-color': '#c8e6c0', 'fill-opacity': .8}},
+    {id: 'urban', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['residential', 'suburb', 'neighbourhood']]], paint: {'fill-color': '#eceae6', 'fill-opacity': .8}},
+    {id: 'commercial', type: 'fill', source: 'omt', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['commercial', 'retail', 'industrial', 'railway']]], paint: {'fill-color': '#e9e5f0', 'fill-opacity': .8}},
+    {id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: {'fill-color': '#aadaff'}},
+    {id: 'river', type: 'line', source: 'omt', 'source-layer': 'waterway', minzoom: 8, paint: {'line-color': '#aadaff', 'line-width': lw([8, .6, 14, 5])}},
+    {id: 'runway', type: 'line', source: 'omt', 'source-layer': 'aeroway', minzoom: 10, filter: ['==', ['get', 'class'], 'runway'], paint: {'line-color': '#dadce0', 'line-width': lw([10, 1, 15, 14])}},
+    {id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: {'fill-color': '#e8e6e3', 'fill-outline-color': '#dad7d2'}},
+    {id: 'ferry', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['==', ['get', 'class'], 'ferry'], paint: {'line-color': '#5c9bd6', 'line-width': 1, 'line-dasharray': [3, 3]}},
+    {id: 'rail', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 10, filter: ['==', ['get', 'class'], 'rail'], paint: {'line-color': '#c4c7cc', 'line-width': 1}},
+    {id: 'road-minor-case', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 13, filter: ['in', ['get', 'class'], ['literal', ['minor', 'service', 'tertiary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#dcdcdc', 'line-width': lw([13, 1.5, 18, 14])}},
+    {id: 'road-minor', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 11, filter: ['in', ['get', 'class'], ['literal', ['minor', 'service', 'tertiary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#ffffff', 'line-width': lw([11, .6, 18, 12])}},
+    {id: 'road-mid-case', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 9, filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#d6d6d6', 'line-width': lw([9, 1.4, 18, 18])}},
+    {id: 'road-mid', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 7, filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#ffffff', 'line-width': lw([7, .6, 18, 16])}},
+    {id: 'road-main-case', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 6, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#f2b84b', 'line-width': lw([6, 1, 18, 22])}},
+    {id: 'road-main', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 5, filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk']]], layout: {'line-cap': 'round', 'line-join': 'round'}, paint: {'line-color': '#fde293', 'line-width': lw([5, .6, 18, 19])}},
+    {id: 'border', type: 'line', source: 'omt', 'source-layer': 'boundary', filter: ['all', ['<=', ['to-number', ['get', 'admin_level'], 99], 2], ['!=', ['get', 'maritime'], 1]], paint: {'line-color': '#9aa0a6', 'line-width': 1.1, 'line-dasharray': [4, 2]}},
+    {id: 'water-name', type: 'symbol', source: 'omt', 'source-layer': 'water_name', layout: {'text-field': NAME, 'text-font': ['Noto Sans Italic'], 'text-size': ['match', ['get', 'class'], 'ocean', 16, 'sea', 14, 12], 'text-letter-spacing': .08, 'text-max-width': 8}, paint: {'text-color': '#4a83b8', 'text-halo-color': '#aadaff', 'text-halo-width': 1}},
+    {id: 'road-name', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 13, layout: {'symbol-placement': 'line', 'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 11}, paint: {'text-color': '#5f6368', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
+    {id: 'village', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 10, filter: ['in', ['get', 'class'], ['literal', ['village', 'hamlet', 'suburb']]], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-max-width': 8}, paint: {'text-color': '#5f6368', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
+    {id: 'town', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 7, filter: ['==', ['get', 'class'], 'town'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': lw([7, 11, 14, 16]), 'text-max-width': 8}, paint: {'text-color': '#3c4043', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
+    {id: 'city', type: 'symbol', source: 'omt', 'source-layer': 'place', minzoom: 4, filter: ['==', ['get', 'class'], 'city'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': lw([4, 11, 12, 20]), 'text-max-width': 8}, paint: {'text-color': '#202124', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6}},
+    {id: 'country', type: 'symbol', source: 'omt', 'source-layer': 'place', maxzoom: 7, filter: ['==', ['get', 'class'], 'country'], layout: {'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': lw([2, 11, 6, 15]), 'text-max-width': 7}, paint: {'text-color': '#5f6368', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
   ],
 };
 const CARTO = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
@@ -380,7 +384,9 @@ function paint(){
       const w = ctx.measureText(t).width, bx = x - w / 2, by = y + k + 2;
       if (boxes.some(q => bx < q[0] + q[2] + 4 && q[0] < bx + w + 4 && by < q[1] + 16 && q[1] < by + 16)) continue;
       boxes.push([bx, by, w]);
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(t, bx, by + 8); ctx.fillStyle = '#fff'; ctx.fillText(t, bx, by + 8);
+      const sat = prefs.base === 'hybrid';
+      ctx.lineWidth = 3; ctx.strokeStyle = sat ? 'rgba(0,0,0,.75)' : 'rgba(255,255,255,.95)'; ctx.strokeText(t, bx, by + 8);
+      ctx.fillStyle = sat ? '#fff' : '#202124'; ctx.fillText(t, bx, by + 8);
     }
   }
   // my ships go on top: larger, magenta, always named
